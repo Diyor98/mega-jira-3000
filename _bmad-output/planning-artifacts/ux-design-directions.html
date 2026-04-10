@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mega Jira 3000 — Design Directions</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: #111827; color: #F9FAFB; }
+
+  /* Direction Selector */
+  .dir-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: #1F2937; border-bottom: 1px solid #374151; padding: 12px 24px; display: flex; gap: 8px; align-items: center; }
+  .dir-nav h1 { font-size: 14px; font-weight: 600; color: #9CA3AF; margin-right: 16px; white-space: nowrap; }
+  .dir-btn { padding: 6px 14px; border-radius: 4px; border: 1px solid #374151; background: transparent; color: #D1D5DB; font-size: 12px; font-family: inherit; cursor: pointer; transition: all 0.15s; }
+  .dir-btn:hover { background: #374151; color: #F9FAFB; }
+  .dir-btn.active { background: #2563EB; border-color: #2563EB; color: #fff; }
+
+  .direction { display: none; padding-top: 52px; height: 100vh; }
+  .direction.active { display: flex; }
+
+  /* ===== DIRECTION A: Ultra-Dense (Asana-Prime Maximum Density) ===== */
+  .dir-a { background: #FFFFFF; color: #111827; }
+  .dir-a .sidebar { width: 220px; background: #F9FAFB; border-right: 1px solid #E5E7EB; padding: 12px 0; display: flex; flex-direction: column; }
+  .dir-a .sidebar .logo { padding: 8px 16px 16px; font-weight: 700; font-size: 13px; color: #111827; letter-spacing: -0.3px; }
+  .dir-a .sidebar .nav-item { padding: 5px 16px; font-size: 13px; color: #6B7280; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+  .dir-a .sidebar .nav-item:hover { background: #E5E7EB; color: #111827; }
+  .dir-a .sidebar .nav-item.active { color: #2563EB; font-weight: 500; }
+  .dir-a .sidebar .section-label { padding: 16px 16px 4px; font-size: 11px; font-weight: 600; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.5px; }
+  .dir-a .sidebar .project { padding: 5px 16px 5px 28px; font-size: 13px; color: #6B7280; cursor: pointer; }
+  .dir-a .sidebar .project:hover { color: #111827; background: #E5E7EB; }
+
+  .dir-a .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .dir-a .topbar { padding: 10px 20px; border-bottom: 1px solid #E5E7EB; display: flex; align-items: center; justify-content: space-between; }
+  .dir-a .topbar h2 { font-size: 15px; font-weight: 600; }
+  .dir-a .filters { display: flex; gap: 6px; }
+  .dir-a .chip { padding: 3px 10px; border-radius: 4px; background: #F3F4F6; font-size: 12px; color: #6B7280; border: 1px solid #E5E7EB; cursor: pointer; }
+  .dir-a .chip:hover { background: #E5E7EB; color: #111827; }
+  .dir-a .chip.active { background: #DBEAFE; color: #1D4ED8; border-color: #93C5FD; }
+
+  .dir-a .board { flex: 1; display: flex; gap: 1px; background: #E5E7EB; overflow-x: auto; padding: 0; }
+  .dir-a .column { flex: 1; min-width: 220px; background: #F3F4F6; display: flex; flex-direction: column; }
+  .dir-a .col-header { padding: 8px 10px; font-size: 12px; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing: 0.3px; display: flex; justify-content: space-between; position: sticky; top: 0; background: #F3F4F6; border-bottom: 1px solid #E5E7EB; }
+  .dir-a .col-count { background: #E5E7EB; border-radius: 10px; padding: 0 6px; font-size: 11px; font-weight: 500; }
+  .dir-a .cards { padding: 6px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; flex: 1; }
+  .dir-a .card { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 4px; padding: 8px 10px; cursor: pointer; transition: box-shadow 0.1s; }
+  .dir-a .card:hover { box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-color: #D1D5DB; }
+  .dir-a .card-top { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .dir-a .card-key { font-size: 12px; font-weight: 500; color: #6B7280; }
+  .dir-a .card-type { font-size: 10px; padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+  .dir-a .type-story { background: #DBEAFE; color: #1D4ED8; }
+  .dir-a .type-bug { background: #FEE2E2; color: #B91C1C; }
+  .dir-a .type-task { background: #D1FAE5; color: #047857; }
+  .dir-a .type-epic { background: #EDE9FE; color: #6D28D9; }
+  .dir-a .card-title { font-size: 13px; line-height: 1.3; color: #111827; margin-bottom: 6px; }
+  .dir-a .card-meta { display: flex; align-items: center; justify-content: space-between; }
+  .dir-a .card-avatar { width: 20px; height: 20px; border-radius: 50%; background: #D1D5DB; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: #6B7280; }
+  .dir-a .card-priority { width: 8px; height: 8px; border-radius: 50%; }
+  .dir-a .p1 { background: #DC2626; }
+  .dir-a .p2 { background: #D97706; }
+  .dir-a .p3 { background: #2563EB; }
+  .dir-a .p4 { background: #9CA3AF; }
+
+  /* Detail Panel */
+  .dir-a .detail { width: 440px; background: #FFFFFF; border-left: 1px solid #E5E7EB; display: flex; flex-direction: column; overflow-y: auto; }
+  .dir-a .detail-header { padding: 12px 16px; border-bottom: 1px solid #E5E7EB; display: flex; justify-content: space-between; align-items: center; }
+  .dir-a .detail-header h3 { font-size: 13px; color: #6B7280; font-weight: 500; }
+  .dir-a .detail-close { background: none; border: none; color: #9CA3AF; cursor: pointer; font-size: 16px; padding: 4px; }
+  .dir-a .detail-body { padding: 16px; }
+  .dir-a .detail-title { font-size: 16px; font-weight: 600; margin-bottom: 12px; line-height: 1.4; }
+  .dir-a .detail-field { margin-bottom: 12px; }
+  .dir-a .detail-label { font-size: 11px; font-weight: 600; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 4px; }
+  .dir-a .detail-value { font-size: 13px; color: #374151; }
+  .dir-a .detail-desc { font-size: 13px; color: #374151; line-height: 1.6; padding: 12px 0; border-top: 1px solid #F3F4F6; }
+  .dir-a .comment-section { border-top: 1px solid #E5E7EB; padding: 12px 16px; }
+  .dir-a .comment-section h4 { font-size: 12px; font-weight: 600; color: #6B7280; margin-bottom: 8px; }
+  .dir-a .comment { padding: 8px 0; border-bottom: 1px solid #F3F4F6; }
+  .dir-a .comment-author { font-size: 12px; font-weight: 500; color: #111827; }
+  .dir-a .comment-time { font-size: 11px; color: #9CA3AF; }
+  .dir-a .comment-text { font-size: 13px; color: #374151; margin-top: 4px; line-height: 1.5; }
+
+  /* ===== DIRECTION B: Compact List View ===== */
+  .dir-b { background: #FFFFFF; color: #111827; }
+  .dir-b .sidebar { width: 220px; background: #F9FAFB; border-right: 1px solid #E5E7EB; padding: 12px 0; }
+  .dir-b .sidebar .logo { padding: 8px 16px 16px; font-weight: 700; font-size: 13px; }
+  .dir-b .sidebar .nav-item { padding: 5px 16px; font-size: 13px; color: #6B7280; cursor: pointer; }
+  .dir-b .sidebar .nav-item:hover { background: #E5E7EB; }
+  .dir-b .sidebar .nav-item.active { color: #2563EB; font-weight: 500; }
+  .dir-b .main { flex: 1; display: flex; flex-direction: column; }
+  .dir-b .topbar { padding: 10px 20px; border-bottom: 1px solid #E5E7EB; display: flex; align-items: center; justify-content: space-between; }
+  .dir-b .topbar h2 { font-size: 15px; font-weight: 600; }
+  .dir-b .view-toggle { display: flex; gap: 2px; background: #F3F4F6; border-radius: 4px; padding: 2px; }
+  .dir-b .view-btn { padding: 4px 10px; border-radius: 3px; border: none; background: transparent; font-size: 12px; color: #6B7280; cursor: pointer; font-family: inherit; }
+  .dir-b .view-btn.active { background: #FFFFFF; color: #111827; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+
+  .dir-b .list-view { flex: 1; overflow-y: auto; }
+  .dir-b .list-header { display: grid; grid-template-columns: 100px 1fr 100px 80px 100px 40px; padding: 6px 20px; font-size: 11px; font-weight: 600; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 1px solid #E5E7EB; background: #F9FAFB; position: sticky; top: 0; }
+  .dir-b .list-group { border-bottom: 1px solid #E5E7EB; }
+  .dir-b .list-group-header { padding: 8px 20px; font-size: 12px; font-weight: 600; color: #6B7280; background: #F9FAFB; border-bottom: 1px solid #E5E7EB; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .dir-b .list-group-count { font-size: 11px; font-weight: 400; color: #9CA3AF; }
+  .dir-b .list-row { display: grid; grid-template-columns: 100px 1fr 100px 80px 100px 40px; padding: 6px 20px; border-bottom: 1px solid #F3F4F6; align-items: center; cursor: pointer; font-size: 13px; }
+  .dir-b .list-row:hover { background: #F9FAFB; }
+  .dir-b .list-key { font-size: 12px; font-weight: 500; color: #6B7280; }
+  .dir-b .list-title { color: #111827; }
+  .dir-b .list-assignee { font-size: 12px; color: #6B7280; }
+  .dir-b .list-status { font-size: 11px; padding: 2px 8px; border-radius: 3px; text-align: center; }
+  .dir-b .status-todo { background: #F3F4F6; color: #6B7280; }
+  .dir-b .status-progress { background: #DBEAFE; color: #1D4ED8; }
+  .dir-b .status-review { background: #FEF3C7; color: #92400E; }
+  .dir-b .status-done { background: #D1FAE5; color: #047857; }
+
+  /* ===== DIRECTION C: Dark Mode Variant ===== */
+  .dir-c { background: #0F172A; color: #E2E8F0; }
+  .dir-c .sidebar { width: 220px; background: #1E293B; border-right: 1px solid #334155; padding: 12px 0; }
+  .dir-c .sidebar .logo { padding: 8px 16px 16px; font-weight: 700; font-size: 13px; color: #F1F5F9; }
+  .dir-c .sidebar .nav-item { padding: 5px 16px; font-size: 13px; color: #94A3B8; cursor: pointer; }
+  .dir-c .sidebar .nav-item:hover { background: #334155; color: #F1F5F9; }
+  .dir-c .sidebar .nav-item.active { color: #60A5FA; font-weight: 500; }
+  .dir-c .main { flex: 1; display: flex; flex-direction: column; }
+  .dir-c .topbar { padding: 10px 20px; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; }
+  .dir-c .topbar h2 { font-size: 15px; font-weight: 600; color: #F1F5F9; }
+  .dir-c .board { flex: 1; display: flex; gap: 1px; background: #334155; overflow-x: auto; }
+  .dir-c .column { flex: 1; min-width: 220px; background: #1E293B; }
+  .dir-c .col-header { padding: 8px 10px; font-size: 12px; font-weight: 600; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; }
+  .dir-c .col-count { background: #334155; border-radius: 10px; padding: 0 6px; font-size: 11px; }
+  .dir-c .cards { padding: 6px; display: flex; flex-direction: column; gap: 4px; }
+  .dir-c .card { background: #0F172A; border: 1px solid #334155; border-radius: 4px; padding: 8px 10px; cursor: pointer; }
+  .dir-c .card:hover { border-color: #475569; }
+  .dir-c .card-key { font-size: 12px; font-weight: 500; color: #94A3B8; }
+  .dir-c .card-title { font-size: 13px; color: #F1F5F9; margin: 4px 0 6px; }
+  .dir-c .card-meta { display: flex; align-items: center; justify-content: space-between; }
+  .dir-c .card-avatar { width: 20px; height: 20px; border-radius: 50%; background: #475569; font-size: 10px; font-weight: 600; color: #94A3B8; display: flex; align-items: center; justify-content: center; }
+
+  /* Shared chip styles for dir-c */
+  .dir-c .filters { display: flex; gap: 6px; }
+  .dir-c .chip { padding: 3px 10px; border-radius: 4px; background: #334155; font-size: 12px; color: #94A3B8; border: 1px solid #475569; cursor: pointer; }
+  .dir-c .chip:hover { background: #475569; color: #F1F5F9; }
+
+  /* ===== Shared ===== */
+  .cmd-palette { position: fixed; top: 20%; left: 50%; transform: translateX(-50%); width: 520px; background: #FFFFFF; border-radius: 8px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); z-index: 200; display: none; border: 1px solid #E5E7EB; }
+  .cmd-palette.show { display: block; }
+  .cmd-input { width: 100%; padding: 14px 16px; border: none; font-size: 15px; font-family: inherit; outline: none; border-bottom: 1px solid #E5E7EB; border-radius: 8px 8px 0 0; }
+  .cmd-results { max-height: 300px; overflow-y: auto; }
+  .cmd-item { padding: 10px 16px; font-size: 13px; color: #374151; cursor: pointer; display: flex; align-items: center; gap: 10px; }
+  .cmd-item:hover { background: #F3F4F6; }
+  .cmd-item .shortcut { margin-left: auto; font-size: 11px; color: #9CA3AF; background: #F3F4F6; padding: 2px 6px; border-radius: 3px; }
+  .cmd-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 199; display: none; }
+  .cmd-overlay.show { display: block; }
+
+  .hint { position: fixed; bottom: 16px; right: 16px; background: #1F2937; color: #9CA3AF; padding: 8px 14px; border-radius: 4px; font-size: 12px; z-index: 50; }
+  .hint kbd { background: #374151; padding: 1px 5px; border-radius: 3px; font-size: 11px; color: #D1D5DB; }
+</style>
+</head>
+<body>
+
+<nav class="dir-nav">
+  <h1>MEGA JIRA 3000 — Design Directions</h1>
+  <button class="dir-btn active" onclick="showDir('a')">A: Board (Light)</button>
+  <button class="dir-btn" onclick="showDir('b')">B: List View</button>
+  <button class="dir-btn" onclick="showDir('c')">C: Board (Dark)</button>
+</nav>
+
+<!-- DIRECTION A: Ultra-Dense Board + Detail Panel -->
+<div class="direction dir-a active" id="dir-a">
+  <div class="sidebar">
+    <div class="logo">MJ3000</div>
+    <div class="nav-item active">☰ Board</div>
+    <div class="nav-item">≡ List</div>
+    <div class="nav-item">🔔 Notifications</div>
+    <div class="section-label">Projects</div>
+    <div class="project">● Project Falcon</div>
+    <div class="project" style="color:#111827;font-weight:500;">● Mega Platform</div>
+    <div class="project">● Atlas</div>
+    <div class="section-label">Filters</div>
+    <div class="project">My Issues</div>
+    <div class="project">Recently Updated</div>
+  </div>
+  <div class="main">
+    <div class="topbar">
+      <h2>Mega Platform</h2>
+      <div class="filters">
+        <div class="chip active">Assignee: Me</div>
+        <div class="chip">Type: All</div>
+        <div class="chip">Priority: All</div>
+        <div class="chip" style="color:#2563EB;border-color:#93C5FD;">+ Filter</div>
+      </div>
+    </div>
+    <div class="board">
+      <div class="column">
+        <div class="col-header">Backlog <span class="col-count">8</span></div>
+        <div class="cards">
+          <div class="card"><div class="card-top"><span class="card-key">MEGA-102</span><span class="card-type type-story">Story</span></div><div class="card-title">User avatar upload flow</div><div class="card-meta"><div class="card-avatar">SK</div><div class="card-priority p3"></div></div></div>
+          <div class="card"><div class="card-top"><span class="card-key">MEGA-108</span><span class="card-type type-task">Task</span></div><div class="card-title">Add compound DB indexes</div><div class="card-meta"><div class="card-avatar">MR</div><div class="card-priority p4"></div></div></div>
+          <div class="card"><div class="card-top"><span class="card-key">MEGA-112</span><span class="card-type type-story">Story</span></div><div class="card-title">Saved filter presets</div><div class="card-meta"><div class="card-avatar">—</div><div class="card-priority p3"></div></div></div>
+        </div>
+      </div>
+      <div class="column">
+        <div class="col-header">To Do <span class="col-count">4</span></div>
+        <div class="cards">
+          <div class="card"><div class="card-top"><span class="card-key">MEGA-89</span><span class="card-type type-story">Story</span></div><div class="card-title">Board drag-and-drop transitions</div><div class="card-meta"><div class="card-avatar">AL</div><div class="card-priority p1"></div></div></div>
+          <div class="card"><div class="card-top"><span class="card-key">MEGA-91</span><span class="card-type type-task">Task</span></div><div class="card-title">JWT refresh token rotation</div><div class="card-meta"><div class="card-avatar">MR</div><div class="card-priority p2"></div></div></div>
+        </div>
+      </div>
+      <div class="column">
+        <div class="col-header">In Progress <span class="col-count">3</span></div>
+        <div class="cards">
+          <div class="card" style="border-left: 3px solid #2563EB;"><div class="card-top"><span class="card-key">MEGA-55</span><span class="card-type type-story">Story</span></div><div class="card-title">Real-time WebSocket board sync</div><div class="card-meta"><div class="card-avatar" style="background:#DBEAFE;color:#1D4ED8;">MC</div><div class="card-priority p1"></div></div></div>
+          <div class="card"><div class="card-top"><span class="card-key">MEGA-67</span><span class="card-type type-bug">Bug</span></div><div class="card-title">Card drag fails on Safari 17</div><div class="card-meta"><div class="card-avatar">QN</div><div class="card-priority p2"></div></div></div>
+        </div>
+      </div>
+      <div class="column">
+        <div class="col-header">In Review <span class="col-count">2</span></div>
+        <div class="cards">
+          <div class="card"><div class="card-top"><span class="card-key">MEGA-48</span><span class="card-type type-story">Story</span></div><div class="card-title">RBAC permission enforcement</div><div class="card-meta"><div class="card-avatar">AL</div><div class="card-priority p2"></div></div></div>
+          <div class="card"><div class="card-top"><span class="card-key">MEGA-52</span><span class="card-type type-task">Task</span></div><div class="card-title">Audit trail mutation logging</div><div class="card-meta"><div class="card-avatar">MR</div><div class="card-priority p3"></div></div></div>
+        </div>
+      </div>
+      <div class="column">
+        <div class="col-header">QA <span class="col-count">2</span></div>
+        <div class="cards">
+          <div class="card"><div class="card-top"><span class="card-key">MEGA-41</span><span class="card-type type-story">Story</span></div><div class="card-title">Issue creation form with validation</div><div class="card-meta"><div class="card-avatar">QN</div><div class="card-priority p2"></div></div></div>
+        </div>
+      </div>
+      <div class="column">
+        <div class="col-header">Done <span class="col-count">12</span></div>
+        <div class="cards">
+          <div class="card" style="opacity:0.6;"><div class="card-top"><span class="card-key">MEGA-32</span><span class="card-type type-story">Story</span></div><div class="card-title">Project creation wizard</div><div class="card-meta"><div class="card-avatar">SK</div><div class="card-priority p2"></div></div></div>
+          <div class="card" style="opacity:0.6;"><div class="card-top"><span class="card-key">MEGA-28</span><span class="card-type type-epic">Epic</span></div><div class="card-title">Authentication & session mgmt</div><div class="card-meta"><div class="card-avatar">MR</div><div class="card-priority p1"></div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="detail">
+    <div class="detail-header">
+      <h3>MEGA-55 · Story</h3>
+      <button class="detail-close">✕</button>
+    </div>
+    <div class="detail-body">
+      <div class="detail-title">Real-time WebSocket board sync</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="detail-field"><div class="detail-label">Status</div><div class="detail-value" style="color:#1D4ED8;">● In Progress</div></div>
+        <div class="detail-field"><div class="detail-label">Assignee</div><div class="detail-value">Marcus Chen</div></div>
+        <div class="detail-field"><div class="detail-label">Priority</div><div class="detail-value" style="color:#DC2626;">● P1 Critical</div></div>
+        <div class="detail-field"><div class="detail-label">Type</div><div class="detail-value">Story</div></div>
+        <div class="detail-field"><div class="detail-label">Epic</div><div class="detail-value" style="color:#2563EB;">MEGA-10 Board Experience</div></div>
+        <div class="detail-field"><div class="detail-label">Created</div><div class="detail-value">Apr 3, 2026</div></div>
+      </div>
+      <div class="detail-desc">
+        Implement bidirectional WebSocket syncing for the Kanban board. When any user moves a card, creates an issue, or adds a comment, all connected clients must see the update within 1 second.
+      </div>
+    </div>
+    <div class="comment-section">
+      <h4>Activity · 3 comments</h4>
+      <div class="comment">
+        <div style="display:flex;justify-content:space-between;"><span class="comment-author">Quinn (QA)</span><span class="comment-time">2h ago</span></div>
+        <div class="comment-text">Edge case: what happens when user is mid-drag and another user moves the same card? Need to handle gracefully.</div>
+      </div>
+      <div class="comment">
+        <div style="display:flex;justify-content:space-between;"><span class="comment-author">Marcus Chen</span><span class="comment-time">1h ago</span></div>
+        <div class="comment-text">Good catch. Will implement optimistic lock check before commit. If version mismatch → card returns to original column + inline notification.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DIRECTION B: List View -->
+<div class="direction dir-b" id="dir-b">
+  <div class="sidebar">
+    <div class="logo">MJ3000</div>
+    <div class="nav-item">☰ Board</div>
+    <div class="nav-item active">≡ List</div>
+    <div class="nav-item">🔔 Notifications</div>
+  </div>
+  <div class="main">
+    <div class="topbar">
+      <h2>Mega Platform</h2>
+      <div class="view-toggle">
+        <button class="view-btn">Board</button>
+        <button class="view-btn active">List</button>
+      </div>
+    </div>
+    <div class="list-view">
+      <div class="list-header"><span>Key</span><span>Title</span><span>Assignee</span><span>Priority</span><span>Status</span><span></span></div>
+      <div class="list-group">
+        <div class="list-group-header">▾ In Progress <span class="list-group-count">3 issues</span></div>
+        <div class="list-row"><span class="list-key">MEGA-55</span><span class="list-title">Real-time WebSocket board sync</span><span class="list-assignee">M. Chen</span><span><span class="card-priority p1" style="display:inline-block;width:8px;height:8px;border-radius:50;"></span> P1</span><span class="list-status status-progress">In Progress</span><span>→</span></div>
+        <div class="list-row"><span class="list-key">MEGA-67</span><span class="list-title">Card drag fails on Safari 17</span><span class="list-assignee">Quinn</span><span><span class="card-priority p2" style="display:inline-block;width:8px;height:8px;border-radius:50%;"></span> P2</span><span class="list-status status-progress">In Progress</span><span>→</span></div>
+        <div class="list-row"><span class="list-key">MEGA-73</span><span class="list-title">Notification bell component</span><span class="list-assignee">A. Lee</span><span><span class="card-priority p3" style="display:inline-block;width:8px;height:8px;border-radius:50%;"></span> P3</span><span class="list-status status-progress">In Progress</span><span>→</span></div>
+      </div>
+      <div class="list-group">
+        <div class="list-group-header">▾ In Review <span class="list-group-count">2 issues</span></div>
+        <div class="list-row"><span class="list-key">MEGA-48</span><span class="list-title">RBAC permission enforcement</span><span class="list-assignee">A. Lee</span><span><span class="card-priority p2" style="display:inline-block;width:8px;height:8px;border-radius:50%;"></span> P2</span><span class="list-status status-review">In Review</span><span>→</span></div>
+        <div class="list-row"><span class="list-key">MEGA-52</span><span class="list-title">Audit trail mutation logging</span><span class="list-assignee">M. Ravi</span><span><span class="card-priority p3" style="display:inline-block;width:8px;height:8px;border-radius:50%;"></span> P3</span><span class="list-status status-review">In Review</span><span>→</span></div>
+      </div>
+      <div class="list-group">
+        <div class="list-group-header">▸ To Do <span class="list-group-count">4 issues</span></div>
+      </div>
+      <div class="list-group">
+        <div class="list-group-header">▸ Backlog <span class="list-group-count">8 issues</span></div>
+      </div>
+      <div class="list-group">
+        <div class="list-group-header">▸ Done <span class="list-group-count">12 issues</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DIRECTION C: Dark Board -->
+<div class="direction dir-c" id="dir-c">
+  <div class="sidebar">
+    <div class="logo">MJ3000</div>
+    <div class="nav-item active">☰ Board</div>
+    <div class="nav-item">≡ List</div>
+    <div class="nav-item">🔔 Notifications</div>
+  </div>
+  <div class="main">
+    <div class="topbar">
+      <h2>Mega Platform</h2>
+      <div class="filters">
+        <div class="chip">Assignee: All</div>
+        <div class="chip">Type: All</div>
+      </div>
+    </div>
+    <div class="board">
+      <div class="column"><div class="col-header">Backlog <span class="col-count">8</span></div><div class="cards"><div class="card"><div class="card-key">MEGA-102</div><div class="card-title">User avatar upload flow</div><div class="card-meta"><div class="card-avatar">SK</div></div></div><div class="card"><div class="card-key">MEGA-108</div><div class="card-title">Add compound DB indexes</div><div class="card-meta"><div class="card-avatar">MR</div></div></div></div></div>
+      <div class="column"><div class="col-header">To Do <span class="col-count">4</span></div><div class="cards"><div class="card"><div class="card-key">MEGA-89</div><div class="card-title">Board drag-and-drop transitions</div><div class="card-meta"><div class="card-avatar">AL</div></div></div></div></div>
+      <div class="column"><div class="col-header">In Progress <span class="col-count">3</span></div><div class="cards"><div class="card" style="border-left:3px solid #60A5FA;"><div class="card-key">MEGA-55</div><div class="card-title">Real-time WebSocket board sync</div><div class="card-meta"><div class="card-avatar" style="background:#1E3A5F;color:#60A5FA;">MC</div></div></div><div class="card"><div class="card-key">MEGA-67</div><div class="card-title">Card drag fails on Safari 17</div><div class="card-meta"><div class="card-avatar">QN</div></div></div></div></div>
+      <div class="column"><div class="col-header">In Review <span class="col-count">2</span></div><div class="cards"><div class="card"><div class="card-key">MEGA-48</div><div class="card-title">RBAC permission enforcement</div><div class="card-meta"><div class="card-avatar">AL</div></div></div></div></div>
+      <div class="column"><div class="col-header">QA <span class="col-count">2</span></div><div class="cards"><div class="card"><div class="card-key">MEGA-41</div><div class="card-title">Issue creation form</div><div class="card-meta"><div class="card-avatar">QN</div></div></div></div></div>
+      <div class="column"><div class="col-header">Done <span class="col-count">12</span></div><div class="cards"><div class="card" style="opacity:0.5;"><div class="card-key">MEGA-32</div><div class="card-title">Project creation wizard</div><div class="card-meta"><div class="card-avatar">SK</div></div></div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Command Palette -->
+<div class="cmd-overlay" id="cmd-overlay" onclick="toggleCmd()"></div>
+<div class="cmd-palette" id="cmd-palette">
+  <input class="cmd-input" placeholder="Type a command or search..." autofocus>
+  <div class="cmd-results">
+    <div class="cmd-item">📋 Create new issue <span class="shortcut">C</span></div>
+    <div class="cmd-item">🔍 Search issues... <span class="shortcut">/</span></div>
+    <div class="cmd-item">📁 Switch project <span class="shortcut">P</span></div>
+    <div class="cmd-item">👤 Filter by assignee <span class="shortcut">A</span></div>
+    <div class="cmd-item">☰ Toggle sidebar <span class="shortcut">[</span></div>
+    <div class="cmd-item">⚙ Project settings <span class="shortcut">G S</span></div>
+  </div>
+</div>
+
+<div class="hint">Press <kbd>⌘</kbd> + <kbd>K</kbd> for command palette</div>
+
+<script>
+function showDir(dir) {
+  document.querySelectorAll('.direction').forEach(d => d.classList.remove('active'));
+  document.querySelectorAll('.dir-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('dir-' + dir).classList.add('active');
+  event.target.classList.add('active');
+}
+function toggleCmd() {
+  document.getElementById('cmd-palette').classList.toggle('show');
+  document.getElementById('cmd-overlay').classList.toggle('show');
+  if (document.getElementById('cmd-palette').classList.contains('show')) {
+    document.querySelector('.cmd-input').focus();
+  }
+}
+document.addEventListener('keydown', function(e) {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); toggleCmd(); }
+  if (e.key === 'Escape') { document.getElementById('cmd-palette').classList.remove('show'); document.getElementById('cmd-overlay').classList.remove('show'); }
+});
+</script>
+</body>
+</html>

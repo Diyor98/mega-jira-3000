@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+.next/
+.turbo/
+
+# Environment
+.env
+.env.local
+.env.*.local
+docker/.env.prod
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Coverage
+coverage/
+
+# Debug
+*.log
+npm-debug.log*
+
+# Drizzle
+drizzle.config.ts.timestamp-*

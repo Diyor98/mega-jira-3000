@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* Font */
+  --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
+
+  /* Surface Colors */
+  --color-surface-0: #FFFFFF;
+  --color-surface-1: #F9FAFB;
+  --color-surface-2: #F3F4F6;
+  --color-surface-3: #E5E7EB;
+
+  /* Text Colors */
+  --color-text-primary: #111827;
+  --color-text-secondary: #6B7280;
+  --color-text-tertiary: #9CA3AF;
+
+  /* Accent */
+  --color-accent-blue: #2563EB;
+  --color-accent-blue-dark: #1D4ED8;
+
+  /* Status */
+  --color-status-green: #059669;
+  --color-status-yellow: #D97706;
+  --color-status-red: #DC2626;
+
+  /* Issue Types */
+  --color-issue-epic-bg: #EDE9FE;
+  --color-issue-epic-text: #6D28D9;
+  --color-issue-story-bg: #DBEAFE;
+  --color-issue-story-text: #1D4ED8;
+  --color-issue-task-bg: #D1FAE5;
+  --color-issue-task-text: #047857;
+  --color-issue-bug-bg: #FEE2E2;
+  --color-issue-bug-text: #B91C1C;
+
+  /* Typography Scale */
+  --text-tiny: 11px;
+  --text-tiny--line-height: 14px;
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 14px;
+  --text-sm--line-height: 20px;
+  --text-base: 16px;
+  --text-base--line-height: 24px;
+  --text-lg: 18px;
+  --text-lg--line-height: 28px;
+
+  /* Spacing (4px base) */
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+
+  /* Border Radius */
+  --radius: 4px;
+}
+
+body {
+  background: var(--color-surface-0);
+  color: var(--color-text-primary);
+}
