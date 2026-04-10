@@ -4,10 +4,10 @@ import { ProjectsService } from './projects.service';
 
 describe('ProjectsController', () => {
   let controller: ProjectsController;
-  let projectsService: { create: jest.Mock; findByOwner: jest.Mock };
+  let projectsService: { create: jest.Mock; findByOwner: jest.Mock; getStatuses: jest.Mock };
 
   beforeEach(async () => {
-    projectsService = { create: jest.fn(), findByOwner: jest.fn() };
+    projectsService = { create: jest.fn(), findByOwner: jest.fn(), getStatuses: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ProjectsController],
@@ -51,6 +51,21 @@ describe('ProjectsController', () => {
 
       expect(projectsService.findByOwner).toHaveBeenCalledWith('user-id');
       expect(result).toEqual(expectedProjects);
+    });
+  });
+
+  describe('GET /api/v1/projects/:projectKey/statuses', () => {
+    it('calls service.getStatuses with projectKey', async () => {
+      const mockStatuses = [
+        { id: 's1', name: 'Backlog', position: 1 },
+        { id: 's2', name: 'To Do', position: 2 },
+      ];
+      projectsService.getStatuses.mockResolvedValue(mockStatuses);
+
+      const result = await controller.getStatuses('MEGA');
+
+      expect(projectsService.getStatuses).toHaveBeenCalledWith('MEGA');
+      expect(result).toEqual(mockStatuses);
     });
   });
 

@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, HttpCode, HttpStatus, Req } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, HttpCode, HttpStatus, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { ProjectsService } from './projects.service';
 import type { CreateProjectDto } from './dto/create-project.dto';
@@ -15,6 +15,12 @@ export class ProjectsController {
   ) {
     const userId = (req as any).user.userId;
     return this.projectsService.create(body, userId);
+  }
+
+  @Get(':projectKey/statuses')
+  @HttpCode(HttpStatus.OK)
+  async getStatuses(@Param('projectKey') projectKey: string) {
+    return this.projectsService.getStatuses(projectKey);
   }
 
   @Get()

@@ -2,10 +2,11 @@ import {
   Injectable,
   ConflictException,
   BadRequestException,
+  NotFoundException,
   Inject,
   Logger,
 } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { DEFAULT_WORKFLOW_STATUSES } from '@mega-jira/shared';
 import { DATABASE_TOKEN } from '../../database/database.module';
 import type { Database } from '../../database/db';
@@ -90,5 +91,37 @@ export class ProjectsService {
       })
       .from(projects)
       .where(eq(projects.ownerId, userId));
+  }
+
+  async getStatuses(projectKey: string) {
+    const [project] = await this.db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.key, projectKey))
+      .limit(1);
+
+    if (!project) {
+      throw new NotFoundException(`Project '${projectKey}' not found`);
+    }
+
+    const [defaultWorkflow] = await this.db
+      .select({ id: workflows.id })
+      .from(workflows)
+      .where(and(eq(workflows.projectId, project.id), eq(workflows.isDefault, true)))
+      .limit(1);
+
+    if (!defaultWorkflow) {
+      return [];
+    }
+
+    return this.db
+      .select({
+        id: workflowStatuses.id,
+        name: workflowStatuses.name,
+        position: workflowStatuses.position,
+      })
+      .from(workflowStatuses)
+      .where(eq(workflowStatuses.workflowId, defaultWorkflow.id))
+      .orderBy(workflowStatuses.position);
   }
 }

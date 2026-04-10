@@ -1,4 +1,4 @@
-import { ConflictException, BadRequestException, Logger } from '@nestjs/common';
+import { ConflictException, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
 
 describe('ProjectsService', () => {
@@ -191,6 +191,48 @@ describe('ProjectsService', () => {
       const result = await service.findByOwner('user-1');
 
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('getStatuses', () => {
+    const mockStatuses = [
+      { id: 's1', name: 'Backlog', position: 1 },
+      { id: 's2', name: 'To Do', position: 2 },
+      { id: 's3', name: 'In Progress', position: 3 },
+    ];
+
+    it('returns statuses ordered by position', async () => {
+      let selectCallCount = 0;
+      mockDb.select.mockImplementation(() => {
+        selectCallCount++;
+        if (selectCallCount === 1) {
+          // Project lookup
+          return { from: jest.fn().mockReturnValue({ where: jest.fn().mockReturnValue({ limit: jest.fn().mockResolvedValue([{ id: 'project-id' }]) }) }) };
+        }
+        if (selectCallCount === 2) {
+          // Workflow lookup
+          return { from: jest.fn().mockReturnValue({ where: jest.fn().mockReturnValue({ limit: jest.fn().mockResolvedValue([{ id: 'workflow-id' }]) }) }) };
+        }
+        // Statuses
+        return { from: jest.fn().mockReturnValue({ where: jest.fn().mockReturnValue({ orderBy: jest.fn().mockResolvedValue(mockStatuses) }) }) };
+      });
+
+      const result = await service.getStatuses('MEGA');
+
+      expect(result).toEqual(mockStatuses);
+      expect(result[0].position).toBe(1);
+    });
+
+    it('throws NotFoundException for invalid project', async () => {
+      mockDb.select.mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            limit: jest.fn().mockResolvedValue([]),
+          }),
+        }),
+      });
+
+      await expect(service.getStatuses('INVALID')).rejects.toThrow(NotFoundException);
     });
   });
 });

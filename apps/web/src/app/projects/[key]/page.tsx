@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { DEFAULT_WORKFLOW_STATUSES } from '@mega-jira/shared';
 import { apiClient } from '../../../lib/api-client';
 import { CreateIssueForm } from '../../../components/create-issue-form';
 import { SlideOverPanel } from '../../../components/slide-over-panel';
@@ -20,9 +19,10 @@ interface Issue {
   parentId: string | null;
 }
 
-interface WorkflowStatus {
+interface Status {
   id: string;
   name: string;
+  position: number;
 }
 
 const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
@@ -43,7 +43,7 @@ export default function ProjectPage() {
   const params = useParams();
   const projectKey = params.key as string;
   const [issues, setIssues] = useState<Issue[]>([]);
-  const [statuses, setStatuses] = useState<WorkflowStatus[]>([]);
+  const [statuses, setStatuses] = useState<Status[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
@@ -51,7 +51,11 @@ export default function ProjectPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const issueData = await apiClient.get<Issue[]>(`/projects/${projectKey}/issues`);
+      const [statusData, issueData] = await Promise.all([
+        apiClient.get<Status[]>(`/projects/${projectKey}/statuses`),
+        apiClient.get<Issue[]>(`/projects/${projectKey}/issues`),
+      ]);
+      if (statusData) setStatuses(statusData);
       if (issueData) setIssues(issueData);
     } catch {
       // silently fail
@@ -102,7 +106,11 @@ export default function ProjectPage() {
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <p className="text-sm text-[var(--color-text-tertiary)]">Loading...</p>
+        <div className="flex gap-2 overflow-x-auto p-6">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="flex-shrink-0 w-56 h-64 rounded bg-[var(--color-surface-1)] border border-[var(--color-surface-3)] animate-pulse" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -135,30 +143,29 @@ export default function ProjectPage() {
       )}
 
       <div className="flex gap-2 overflow-x-auto pb-4 flex-1">
-        {DEFAULT_WORKFLOW_STATUSES.map((statusName, statusIndex) => {
-          // All new issues default to Backlog (first status, index 0).
-          // Until a status-name mapping endpoint exists, show all issues in the first column.
-          // Future stories (Epic 3) will add proper status-to-column mapping.
-          const displayIssues = statusIndex === 0 ? issues : [];
+        {statuses.map((status) => {
+          const columnIssues = issuesByStatus.get(status.id) ?? [];
 
           return (
             <div
-              key={statusName}
+              key={status.id}
               className="flex-shrink-0 w-56 rounded bg-[var(--color-surface-1)] border border-[var(--color-surface-3)] flex flex-col"
             >
-              <div className="px-3 py-2 border-b border-[var(--color-surface-3)] flex items-center justify-between">
+              <div className="px-3 py-2 border-b border-[var(--color-surface-3)] flex items-center justify-between sticky top-0 bg-[var(--color-surface-1)] z-10 rounded-t">
                 <h2 className="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-                  {statusName}
+                  {status.name}
                 </h2>
                 <span className="text-xs text-[var(--color-text-tertiary)]">
-                  {displayIssues.length}
+                  {columnIssues.length}
                 </span>
               </div>
               <div className="p-2 flex-1 flex flex-col gap-1.5 min-h-[120px]">
-                {displayIssues.length === 0 ? (
-                  <p className="text-xs text-[var(--color-text-tertiary)] text-center mt-8">No issues</p>
+                {columnIssues.length === 0 ? (
+                  <div className="flex-1 flex items-center justify-center border-2 border-dashed border-[var(--color-surface-3)] rounded m-1 min-h-[80px]">
+                    <p className="text-xs text-[var(--color-text-tertiary)]">No issues</p>
+                  </div>
                 ) : (
-                  displayIssues.map((issue) => {
+                  columnIssues.map((issue) => {
                     const typeColor = TYPE_COLORS[issue.type] ?? TYPE_COLORS.task;
                     const priorityColor = PRIORITY_COLORS[issue.priority] ?? PRIORITY_COLORS.P3;
 

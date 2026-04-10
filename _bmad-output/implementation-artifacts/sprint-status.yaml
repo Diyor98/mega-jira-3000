@@ -59,8 +59,8 @@ development_status:
   epic-2-retrospective: optional
 
   # === EPIC 3: Kanban Board Experience ===
-  epic-3: backlog
-  3-1-board-view-with-columns: backlog
+  epic-3: in-progress
+  3-1-board-view-with-columns: done
   3-2-drag-and-drop-status-transitions: backlog
   3-3-real-time-board-synchronization: backlog
   3-4-optimistic-locking-and-conflict-resolution: backlog
