@@ -61,7 +61,7 @@ development_status:
   # === EPIC 3: Kanban Board Experience ===
   epic-3: in-progress
   3-1-board-view-with-columns: done
-  3-2-drag-and-drop-status-transitions: backlog
+  3-2-drag-and-drop-status-transitions: done
   3-3-real-time-board-synchronization: backlog
   3-4-optimistic-locking-and-conflict-resolution: backlog
   epic-3-retrospective: optional

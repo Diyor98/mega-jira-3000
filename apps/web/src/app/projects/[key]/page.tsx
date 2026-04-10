@@ -2,6 +2,17 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
+import {
+  DndContext,
+  DragOverlay,
+  useDroppable,
+  useDraggable,
+  type DragStartEvent,
+  type DragEndEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
 import { apiClient } from '../../../lib/api-client';
 import { CreateIssueForm } from '../../../components/create-issue-form';
 import { SlideOverPanel } from '../../../components/slide-over-panel';
@@ -17,6 +28,7 @@ interface Issue {
   assigneeId: string | null;
   reporterId: string;
   parentId: string | null;
+  issueVersion: number;
 }
 
 interface Status {
@@ -39,6 +51,113 @@ const PRIORITY_COLORS: Record<string, string> = {
   P4: '#9CA3AF',
 };
 
+// Draggable issue card
+function DraggableIssueCard({ issue, onClick, epicProgress }: {
+  issue: Issue;
+  onClick: () => void;
+  epicProgress?: number;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: issue.id,
+    data: { issue },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      onClick={(e) => {
+        // Only open detail if not dragging
+        if (!isDragging) onClick();
+      }}
+      className={`p-2 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-3)] hover:border-[var(--color-accent-blue)] transition-colors cursor-grab active:cursor-grabbing ${isDragging ? 'opacity-30' : ''}`}
+    >
+      <IssueCardContent issue={issue} epicProgress={epicProgress} />
+    </div>
+  );
+}
+
+// Pure display card (used in card and drag overlay)
+function IssueCardContent({ issue, epicProgress }: { issue: Issue; epicProgress?: number }) {
+  const typeColor = TYPE_COLORS[issue.type] ?? TYPE_COLORS.task;
+  const priorityColor = PRIORITY_COLORS[issue.priority] ?? PRIORITY_COLORS.P3;
+
+  return (
+    <>
+      <div className="flex items-center gap-1.5 mb-1">
+        <span
+          className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+          style={{ backgroundColor: typeColor.bg, color: typeColor.text }}
+        >
+          {issue.type.charAt(0).toUpperCase() + issue.type.slice(1)}
+        </span>
+        <span className="text-xs text-[var(--color-text-tertiary)]">
+          {issue.issueKey}
+        </span>
+      </div>
+      <p className="text-sm text-[var(--color-text-primary)] line-clamp-2">
+        {issue.title}
+      </p>
+      <div className="flex items-center gap-1 mt-1.5">
+        <span
+          className="w-2 h-2 rounded-full inline-block"
+          style={{ backgroundColor: priorityColor }}
+        />
+        <span className="text-[10px] text-[var(--color-text-tertiary)]">
+          {issue.priority}
+        </span>
+      </div>
+      {issue.type === 'epic' && epicProgress !== undefined && (
+        <div className="flex items-center gap-1.5 mt-1.5">
+          <div className="flex-1 h-1 rounded-full bg-[var(--color-surface-3)]">
+            <div
+              className="h-1 rounded-full bg-[var(--color-accent-blue)] transition-all duration-300"
+              style={{ width: `${epicProgress}%` }}
+            />
+          </div>
+          <span className="text-[10px] text-[var(--color-text-tertiary)]">
+            {epicProgress}%
+          </span>
+        </div>
+      )}
+    </>
+  );
+}
+
+// Droppable column
+function DroppableColumn({ status, children, isOver, issueCount }: {
+  status: Status;
+  children: React.ReactNode;
+  isOver: boolean;
+  issueCount: number;
+}) {
+  const { setNodeRef } = useDroppable({ id: status.id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex-shrink-0 w-56 rounded flex flex-col transition-colors duration-150 ${
+        isOver
+          ? 'bg-[var(--color-accent-blue)]/5 border-2 border-[var(--color-accent-blue)]'
+          : 'bg-[var(--color-surface-1)] border border-[var(--color-surface-3)]'
+      }`}
+    >
+      <div className="px-3 py-2 border-b border-[var(--color-surface-3)] flex items-center justify-between sticky top-0 bg-[var(--color-surface-1)] z-10 rounded-t">
+        <h2 className="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
+          {status.name}
+        </h2>
+        <span className="text-xs text-[var(--color-text-tertiary)]">
+          {issueCount}
+        </span>
+      </div>
+      <div className="p-2 flex-1 flex flex-col gap-1.5 min-h-[120px]">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export default function ProjectPage() {
   const params = useParams();
   const projectKey = params.key as string;
@@ -48,6 +167,12 @@ export default function ProjectPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const [epicProgress, setEpicProgress] = useState<Record<string, number>>({});
+  const [activeIssue, setActiveIssue] = useState<Issue | null>(null);
+  const [overColumnId, setOverColumnId] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
 
   const loadData = useCallback(async () => {
     try {
@@ -93,6 +218,63 @@ export default function ProjectPage() {
   function handleIssueCreated() {
     setShowCreateForm(false);
     loadData();
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    const issue = event.active.data.current?.issue as Issue;
+    setActiveIssue(issue ?? null);
+  }
+
+  function handleDragOver(event: { over: { id: string } | null }) {
+    setOverColumnId(event.over?.id as string ?? null);
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    setActiveIssue(null);
+    setOverColumnId(null);
+
+    const { active, over } = event;
+    if (!over) return;
+
+    const issue = active.data.current?.issue as Issue;
+    if (!issue) return;
+
+    const newStatusId = over.id as string;
+    if (issue.statusId === newStatusId) return;
+
+    // Optimistic update
+    const oldStatusId = issue.statusId;
+    const oldVersion = issue.issueVersion;
+
+    setIssues((prev) =>
+      prev.map((i) =>
+        i.id === issue.id ? { ...i, statusId: newStatusId } : i,
+      ),
+    );
+
+    // Server update
+    apiClient
+      .patch<Issue>(`/projects/${projectKey}/issues/${issue.id}`, {
+        statusId: newStatusId,
+        issueVersion: oldVersion,
+      })
+      .then((updated) => {
+        if (updated) {
+          setIssues((prev) =>
+            prev.map((i) =>
+              i.id === issue.id ? { ...i, ...updated } : i,
+            ),
+          );
+        }
+      })
+      .catch(() => {
+        // Rollback
+        setIssues((prev) =>
+          prev.map((i) =>
+            i.id === issue.id ? { ...i, statusId: oldStatusId, issueVersion: oldVersion } : i,
+          ),
+        );
+      });
   }
 
   // Group issues by statusId
@@ -142,84 +324,53 @@ export default function ProjectPage() {
         />
       )}
 
-      <div className="flex gap-2 overflow-x-auto pb-4 flex-1">
-        {statuses.map((status) => {
-          const columnIssues = issuesByStatus.get(status.id) ?? [];
+      <DndContext
+        sensors={sensors}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="flex gap-2 overflow-x-auto pb-4 flex-1">
+          {statuses.map((status) => {
+            const columnIssues = issuesByStatus.get(status.id) ?? [];
 
-          return (
-            <div
-              key={status.id}
-              className="flex-shrink-0 w-56 rounded bg-[var(--color-surface-1)] border border-[var(--color-surface-3)] flex flex-col"
-            >
-              <div className="px-3 py-2 border-b border-[var(--color-surface-3)] flex items-center justify-between sticky top-0 bg-[var(--color-surface-1)] z-10 rounded-t">
-                <h2 className="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-                  {status.name}
-                </h2>
-                <span className="text-xs text-[var(--color-text-tertiary)]">
-                  {columnIssues.length}
-                </span>
-              </div>
-              <div className="p-2 flex-1 flex flex-col gap-1.5 min-h-[120px]">
+            return (
+              <DroppableColumn
+                key={status.id}
+                status={status}
+                isOver={overColumnId === status.id}
+                issueCount={columnIssues.filter((i) => i.id !== activeIssue?.id).length}
+              >
                 {columnIssues.length === 0 ? (
                   <div className="flex-1 flex items-center justify-center border-2 border-dashed border-[var(--color-surface-3)] rounded m-1 min-h-[80px]">
                     <p className="text-xs text-[var(--color-text-tertiary)]">No issues</p>
                   </div>
                 ) : (
-                  columnIssues.map((issue) => {
-                    const typeColor = TYPE_COLORS[issue.type] ?? TYPE_COLORS.task;
-                    const priorityColor = PRIORITY_COLORS[issue.priority] ?? PRIORITY_COLORS.P3;
-
-                    return (
-                      <div
-                        key={issue.id}
-                        onClick={() => setSelectedIssueId(issue.id)}
-                        className="p-2 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-3)] hover:border-[var(--color-accent-blue)] transition-colors cursor-pointer"
-                      >
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <span
-                            className="text-[10px] font-medium px-1.5 py-0.5 rounded"
-                            style={{ backgroundColor: typeColor.bg, color: typeColor.text }}
-                          >
-                            {issue.type.charAt(0).toUpperCase() + issue.type.slice(1)}
-                          </span>
-                          <span className="text-xs text-[var(--color-text-tertiary)]">
-                            {issue.issueKey}
-                          </span>
-                        </div>
-                        <p className="text-sm text-[var(--color-text-primary)] line-clamp-2">
-                          {issue.title}
-                        </p>
-                        <div className="flex items-center gap-1 mt-1.5">
-                          <span
-                            className="w-2 h-2 rounded-full inline-block"
-                            style={{ backgroundColor: priorityColor }}
-                          />
-                          <span className="text-[10px] text-[var(--color-text-tertiary)]">
-                            {issue.priority}
-                          </span>
-                        </div>
-                        {issue.type === 'epic' && epicProgress[issue.id] !== undefined && (
-                          <div className="flex items-center gap-1.5 mt-1.5">
-                            <div className="flex-1 h-1 rounded-full bg-[var(--color-surface-3)]">
-                              <div
-                                className="h-1 rounded-full bg-[var(--color-accent-blue)] transition-all duration-300"
-                                style={{ width: `${epicProgress[issue.id]}%` }}
-                              />
-                            </div>
-                            <span className="text-[10px] text-[var(--color-text-tertiary)]">
-                              {epicProgress[issue.id]}%
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
+                  columnIssues.map((issue) => (
+                    <DraggableIssueCard
+                      key={issue.id}
+                      issue={issue}
+                      onClick={() => setSelectedIssueId(issue.id)}
+                      epicProgress={issue.type === 'epic' ? epicProgress[issue.id] : undefined}
+                    />
+                  ))
                 )}
-              </div>
+              </DroppableColumn>
+            );
+          })}
+        </div>
+
+        <DragOverlay>
+          {activeIssue && (
+            <div className="p-2 rounded bg-[var(--color-surface-0)] border-2 border-[var(--color-accent-blue)] shadow-lg w-56 scale-[1.02]">
+              <IssueCardContent
+                issue={activeIssue}
+                epicProgress={activeIssue.type === 'epic' ? epicProgress[activeIssue.id] : undefined}
+              />
             </div>
-          );
-        })}
-      </div>
+          )}
+        </DragOverlay>
+      </DndContext>
 
       <SlideOverPanel
         isOpen={selectedIssueId !== null}

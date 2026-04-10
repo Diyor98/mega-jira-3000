@@ -17,6 +17,7 @@ export const updateIssueSchema = z.object({
   description: z.string().nullable().optional(),
   assigneeId: z.string().uuid('Invalid assignee ID').nullable().optional(),
   parentId: z.string().uuid('Invalid parent ID').nullable().optional(),
+  statusId: z.string().uuid('Invalid status ID').optional(),
   issueVersion: z.number().int().positive('Issue version is required'),
 });
 

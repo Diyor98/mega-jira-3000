@@ -429,6 +429,90 @@ describe('IssuesService', () => {
       );
       logSpy.mockRestore();
     });
+
+    it('updates statusId when valid status provided', async () => {
+      // Need extra select for status validation (innerJoin)
+      let selectCallCount = 0;
+      mockDb.select.mockImplementation(() => {
+        selectCallCount++;
+        if (selectCallCount === 1) return { from: jest.fn().mockReturnValue({ where: jest.fn().mockReturnValue({ limit: jest.fn().mockResolvedValue([mockProject]) }) }) };
+        // Status validation with innerJoin
+        return {
+          from: jest.fn().mockReturnValue({
+            innerJoin: jest.fn().mockReturnValue({
+              where: jest.fn().mockReturnValue({
+                limit: jest.fn().mockResolvedValue([{ id: '00000000-0000-0000-0000-000000000099' }]),
+              }),
+            }),
+          }),
+        };
+      });
+      mockDb.update.mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            returning: jest.fn().mockResolvedValue([{ ...updatedIssue, statusId: '00000000-0000-0000-0000-000000000099' }]),
+          }),
+        }),
+      });
+
+      const result = await service.update('MEGA', 'issue-id', {
+        statusId: '00000000-0000-0000-0000-000000000099',
+        issueVersion: 1,
+      }, userId);
+
+      expect(result.statusId).toBe('00000000-0000-0000-0000-000000000099');
+    });
+
+    it('throws BadRequestException for statusId not in project workflow', async () => {
+      let selectCallCount = 0;
+      mockDb.select.mockImplementation(() => {
+        selectCallCount++;
+        if (selectCallCount === 1) return { from: jest.fn().mockReturnValue({ where: jest.fn().mockReturnValue({ limit: jest.fn().mockResolvedValue([mockProject]) }) }) };
+        return {
+          from: jest.fn().mockReturnValue({
+            innerJoin: jest.fn().mockReturnValue({
+              where: jest.fn().mockReturnValue({
+                limit: jest.fn().mockResolvedValue([]),
+              }),
+            }),
+          }),
+        };
+      });
+
+      await expect(
+        service.update('MEGA', 'issue-id', { statusId: '00000000-0000-0000-0000-000000000088', issueVersion: 1 }, userId),
+      ).rejects.toThrow('Invalid status for this project');
+    });
+
+    it('audit logs statusId in changed fields', async () => {
+      const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation();
+      let selectCallCount = 0;
+      mockDb.select.mockImplementation(() => {
+        selectCallCount++;
+        if (selectCallCount === 1) return { from: jest.fn().mockReturnValue({ where: jest.fn().mockReturnValue({ limit: jest.fn().mockResolvedValue([mockProject]) }) }) };
+        return {
+          from: jest.fn().mockReturnValue({
+            innerJoin: jest.fn().mockReturnValue({
+              where: jest.fn().mockReturnValue({
+                limit: jest.fn().mockResolvedValue([{ id: '00000000-0000-0000-0000-000000000099' }]),
+              }),
+            }),
+          }),
+        };
+      });
+      mockDb.update.mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            returning: jest.fn().mockResolvedValue([{ ...updatedIssue, statusId: '00000000-0000-0000-0000-000000000099' }]),
+          }),
+        }),
+      });
+
+      await service.update('MEGA', 'issue-id', { statusId: '00000000-0000-0000-0000-000000000099', issueVersion: 1 }, userId);
+
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('fields=[statusId]'));
+      logSpy.mockRestore();
+    });
   });
 
   describe('create with parentId', () => {

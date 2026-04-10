@@ -380,6 +380,24 @@ export class IssuesService {
       updateData.parentId = fieldsToUpdate.parentId;
       changedFields.push('parentId');
     }
+    if (fieldsToUpdate.statusId !== undefined) {
+      // Validate status belongs to project's workflow
+      const [status] = await this.db
+        .select({ id: workflowStatuses.id })
+        .from(workflowStatuses)
+        .innerJoin(workflows, eq(workflowStatuses.workflowId, workflows.id))
+        .where(and(
+          eq(workflowStatuses.id, fieldsToUpdate.statusId),
+          eq(workflows.projectId, project.id),
+        ))
+        .limit(1);
+
+      if (!status) {
+        throw new BadRequestException('Invalid status for this project');
+      }
+      updateData.statusId = fieldsToUpdate.statusId;
+      changedFields.push('statusId');
+    }
 
     // No-op guard: if no fields changed, return current issue without updating
     if (changedFields.length === 0) {
