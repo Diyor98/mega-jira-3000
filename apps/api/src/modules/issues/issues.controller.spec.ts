@@ -49,9 +49,9 @@ describe('IssuesController', () => {
       ];
       issuesService.findByProject.mockResolvedValue(expectedIssues);
 
-      const result = await controller.findAll('MEGA');
+      const result = await controller.findAll('MEGA', {});
 
-      expect(issuesService.findByProject).toHaveBeenCalledWith('MEGA');
+      expect(issuesService.findByProject).toHaveBeenCalledWith('MEGA', {});
       expect(result).toEqual(expectedIssues);
     });
   });

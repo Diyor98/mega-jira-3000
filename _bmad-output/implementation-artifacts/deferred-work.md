@@ -1,5 +1,28 @@
 # Deferred Work
 
+## Deferred from: code review of 6-1-issue-comments-with-markdown (2026-04-13)
+
+- `CommentsService.assertAccessAndLoadIssue` uses owner-only gate (`project.ownerId !== userId` → 403). Non-owner collaborators can't read OR write comments. Same inherited MVP limitation from Stories 4.2/5.2 — today projects only have owners, so the gate collapses to "can you see this project". Epic 8 RBAC should relax this to membership check (apps/api/src/modules/comments/comments.service.ts)
+
+## Deferred from: code review of 5-1-structured-filter-bar (2026-04-13)
+
+- `createdTo` date-range filter uses UTC end-of-day — users in non-UTC timezones get an offset upper bound (e.g., +5.5h for UTC+5:30). Proper fix requires accepting a client-side `?tz=...` query param and converting server-side, or moving the end-of-day widening to the client. Flag for Story 5.2 when saved presets need to capture the same tz context, or for Epic 8 when RBAC/locale settings land (apps/api/src/modules/issues/issues.service.ts)
+- Filter tests use `expect(whereSpy).toHaveBeenCalled()` to verify the code path runs but do NOT inspect the Drizzle SQL conditions appended to `and(...)`. A bug that silently drops a filter condition would not be caught. Future improvement: use `PgDialect.sqlToQuery()` to stringify the captured argument and assert substring matches. Flagged for Story 5.2 test strengthening (apps/api/src/modules/issues/issues.service.spec.ts)
+
+## Deferred from: code review of 4-3-mandatory-fields-on-transitions (2026-04-13)
+
+- FR20 "Done" literal match is case-sensitive — an admin who creates a status literally named "done" (lowercase) or "DONE" will not trigger the reopen clear. Inherited FRAGILE caveat from Story 4.1; real fix is a `status_category` column on workflow_statuses (apps/api/src/modules/issues/issues.service.ts)
+- `bulkMoveIssues` bypasses workflow rules — same issue re-surfaced by the 4.3 review. Already documented in the 4.2 deferred list. Resolve via a `status_category` column + bulk-path rule-check when Epic 8 lands (apps/api/src/modules/workflow/workflow.service.ts:316-374)
+- `updateStatus` rename dup-check runs outside its transaction — pre-existing from Story 4.1 (apps/api/src/modules/workflow/workflow.service.ts)
+
+## Deferred from: code review of 4-2-transition-rules-configuration (2026-04-13)
+
+- `updateStatus` rename duplicate-check runs outside the transaction — pre-existing from Story 4.1; concurrent renames to the same name can race past the check (apps/api/src/modules/workflow/workflow.service.ts)
+- `issue.updated` WebSocket handler is not version-gated — pre-existing from Story 3.3; a stale broadcast can overwrite newer local state (apps/web/src/app/projects/[key]/page.tsx)
+- `confirmDeleteWithMove` issues non-atomic move-then-delete REST calls — pre-existing from Story 4.1; if a new issue lands in the source status between the two calls, delete fails and leaves the board in an intermediate state
+- `bulkMoveIssues` bypasses workflow rule enforcement — pre-existing admin path from Story 4.1. Story 4.2 AC #3 scopes rule enforcement to `IssuesService.update()` only. Flag for Story 4.3 when more rule types land, or for Epic 8 when RBAC defines who can invoke bulk moves (apps/api/src/modules/workflow/workflow.service.ts:316-374)
+
+
 ## Deferred from: code review of 1-2-user-registration (2026-04-10)
 
 - DB connection lifecycle: No onModuleDestroy hook, no pool config, connection created at import time (apps/api/src/database/db.ts)
@@ -57,3 +80,39 @@
 - W3: No project membership check on issue detail endpoint — any authenticated user can read
 - W4: Empty description "click to add" placeholder has no onClick handler — editing is Story 2.3
 - W5: issueId param not validated as UUID format — Drizzle parameterizes safely
+
+## Deferred from: code review of 3-3-real-time-board-synchronization (2026-04-12)
+
+- Multi-tab same-user joins room twice and doubles client-side events (apps/web/src/hooks/use-websocket.ts:52) — requires per-user dedup architecture, low impact
+
+## Deferred from: code review of 3-4-optimistic-locking-and-conflict-resolution (2026-04-12)
+
+- 3-second self-mutation dedup expires before slow PATCH/409 round-trip on degraded networks — remote echo can re-apply stale statusId after rollback (apps/web/src/app/projects/[key]/page.tsx:197-204)
+- Concurrent WS issue.moved during in-flight drag PATCH — `.catch` rollback can clobber a legitimate remote update applied between optimistic update and 409 (apps/web/src/app/projects/[key]/page.tsx:596-608)
+- saveField and reviewConflict lack mount-guard/abort controller — closing slide-over during in-flight requests yields React state-update-after-unmount warnings (apps/web/src/components/issue-detail-panel.tsx:131-172)
+- AC #2 smooth rollback animation not browser-smoke-tested — @dnd-kit transform-transition gotcha unverified empirically
+- AC #8 audit log field is issueId (UUID) not issueKey per spec text — pre-approved in Dev Notes to avoid extra DB roundtrip on 409 path; document for PO sign-off
+- AC #9 test (d) "successful update increments version exactly once" not re-verified explicitly — pre-existing test, full suite 134/134 passes
+- ConflictNotification a11y polish: no focus management on mount, focus:ring-1 may fail WCAG 2.4.11 on amber background (apps/web/src/components/conflict-notification.tsx)
+- Empty-string draft renders no "Your unsaved value" hint, hiding intent to clear a field (apps/web/src/components/conflict-notification.tsx:17)
+- Board notification text appends issueKey, slight wording deviation from AC #3 literal — intentional, more informative
+
+## Deferred from: 4-1-custom-workflow-statuses (2026-04-13)
+
+- Epic progress roll-up uses hardcoded `name === 'Done'` (apps/api/src/modules/issues/issues.service.ts:319). After Story 4.1, admins can rename "Done" to anything — progress will silently report 0%. Fix by adding a `status_category` enum column ('todo' / 'in_progress' / 'done') to `workflow_statuses` and migrating; then join on category instead of name.
+- Real-time WebSocket sync of workflow status changes (workflow.status.added/.renamed/.deleted) — admins changing statuses are not propagated to other clients until they reload the board page.
+- A real "Project Admin" role — Story 4.1 uses `projects.owner_id` as proxy. Replace with the role check from Epic 8 (story 8-1) when available.
+- `GET /api/v1/projects/:projectKey` endpoint still missing (originally deferred from Story 1.4 W1) — Story 4.1 settings page works around this by hitting `GET /projects` and finding by key.
+- No drag-to-reorder for workflow statuses in the settings page — buttons (move up / move down) only.
+
+## Deferred from: code review of 4-1-custom-workflow-statuses (2026-04-13)
+
+- `reorderStatus` reads all rows inside its transaction without `FOR UPDATE`; concurrent reorder by the same owner in two tabs can interleave writes → duplicate positions (apps/api/src/modules/workflow/workflow.service.ts:170-200). Same class as addStatus TOCTOU; would benefit from a UNIQUE (workflow_id, position) constraint added in a follow-up
+- Soft-deleted issues retain dangling status_id after status delete (bulkMoveIssues filters deletedAt IS NULL) — no impact today (no restore feature), but data is silently inconsistent if/when restore ships
+- assertOwnerAndLoadContext does two plain SELECTs without row locks; orphan-workflow risk if concurrent project deletion ships in a future story
+- Settings page renders "not owner" banner instead of 404 for typo'd project URLs (same code path)
+- handleRenameSave double-fires on Enter+blur (no functional impact)
+- handleRenameSave silently cancels on blank input with no feedback
+- Audit action variant `workflowStatus.renamedAndReordered` is undocumented in the spec (which enumerated add/rename/reorder/delete only)
+- Frontend isOwner derived from GET /projects list — works today because the endpoint filters by owner, but will need revision when Epic 8 ships shared projects
+- Regex-based 409 message parsing on the frontend (/Status has (\d+) issue/) is brittle to backend message format changes / i18n

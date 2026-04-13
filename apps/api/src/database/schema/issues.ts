@@ -21,6 +21,8 @@ export const issues = pgTable(
     reporterId: uuid('reporter_id').notNull().references(() => users.id),
     parentId: uuid('parent_id'),
     issueVersion: integer('issue_version').notNull().default(1),
+    resolution: text('resolution'),
+    statusChangedAt: timestamp('status_changed_at', { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),

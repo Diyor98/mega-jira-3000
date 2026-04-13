@@ -25,7 +25,21 @@ export { ISSUE_TYPES, ISSUE_PRIORITIES } from './types/issue';
 export type { IssueType, IssuePriority } from './types/issue';
 export { LINK_TYPES } from './types/issue-link';
 export type { LinkType } from './types/issue-link';
-export { createIssueSchema, updateIssueSchema } from './schemas/issue.schema';
-export type { CreateIssueInput, UpdateIssueInput } from './schemas/issue.schema';
+export {
+  createIssueSchema,
+  updateIssueSchema,
+  issueListQuerySchema,
+  filterPresetConfigSchema,
+  createFilterPresetSchema,
+} from './schemas/issue.schema';
+export type {
+  CreateIssueInput,
+  UpdateIssueInput,
+  IssueListQuery,
+  FilterPresetConfig,
+  CreateFilterPresetInput,
+} from './schemas/issue.schema';
 export { createIssueLinkSchema } from './schemas/issue-link.schema';
 export type { CreateIssueLinkInput } from './schemas/issue-link.schema';
+export { createCommentSchema } from './schemas/comment.schema';
+export type { CreateCommentInput } from './schemas/comment.schema';

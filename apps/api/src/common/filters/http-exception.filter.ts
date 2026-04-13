@@ -13,6 +13,7 @@ const STATUS_TO_ERROR: Record<number, string> = {
   403: 'Forbidden',
   404: 'NotFound',
   409: 'Conflict',
+  422: 'UnprocessableEntity',
   429: 'TooManyRequests',
   500: 'InternalServerError',
 };
@@ -26,6 +27,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Internal server error';
     let error = 'InternalServerError';
+    let extras: Record<string, unknown> = {};
+
+    // Only these top-level fields on an HttpException response body are
+    // forwarded to the client. Any other fields (message[] arrays from
+    // ValidationPipe, internal IDs, stack traces, etc.) are dropped.
+    const FORWARDABLE_FIELDS = new Set(['rule']);
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -39,12 +46,28 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         exceptionResponse !== null
       ) {
         const res = exceptionResponse as Record<string, unknown>;
-        message = (res['message'] as string) ?? message;
+        const rawMessage = res['message'];
+        if (typeof rawMessage === 'string') {
+          message = rawMessage;
+        } else if (Array.isArray(rawMessage) && rawMessage.length > 0) {
+          // NestJS ValidationPipe emits a string[] — join for the wire.
+          message = rawMessage.filter((m): m is string => typeof m === 'string').join(', ');
+        }
         error = (res['error'] as string) ?? error;
+
+        // Forward only explicitly allow-listed structured fields (e.g. `rule`
+        // on WorkflowRuleViolationException). Everything else is dropped to
+        // avoid leaking internal exception payload fields.
+        for (const key of Object.keys(res)) {
+          if (FORWARDABLE_FIELDS.has(key)) {
+            extras[key] = res[key];
+          }
+        }
       }
     }
 
     response.status(status).json({
+      ...extras,
       error,
       message,
       code: status,

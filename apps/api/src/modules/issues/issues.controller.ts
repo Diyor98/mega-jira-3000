@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Delete, Body, Param, HttpCode, HttpStatus, Req } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Delete, Body, Param, Query, HttpCode, HttpStatus, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { IssuesService } from './issues.service';
 import type { CreateIssueDto } from './dto/create-issue.dto';
@@ -22,8 +22,11 @@ export class IssuesController {
 
   @Get()
   @HttpCode(HttpStatus.OK)
-  async findAll(@Param('projectKey') projectKey: string) {
-    return this.issuesService.findByProject(projectKey);
+  async findAll(
+    @Param('projectKey') projectKey: string,
+    @Query() query: Record<string, unknown>,
+  ) {
+    return this.issuesService.findByProject(projectKey, query);
   }
 
   @Get(':issueId/children')

@@ -1,6 +1,13 @@
 import { BadRequestException, NotFoundException, ConflictException, Logger } from '@nestjs/common';
 import { IssuesService } from './issues.service';
 
+const mockEventService = {
+  emitIssueCreated: jest.fn(),
+  emitIssueMoved: jest.fn(),
+  emitIssueUpdated: jest.fn(),
+  emitIssueDeleted: jest.fn(),
+};
+
 describe('IssuesService', () => {
   let service: IssuesService;
   let mockDb: {
@@ -89,7 +96,8 @@ describe('IssuesService', () => {
       update: jest.fn(),
       transaction: jest.fn(),
     };
-    service = new IssuesService(mockDb as never);
+    jest.clearAllMocks();
+    service = new IssuesService(mockDb as never, mockEventService as never);
   });
 
   describe('create', () => {
@@ -213,7 +221,9 @@ describe('IssuesService', () => {
         }
         return {
           from: jest.fn().mockReturnValue({
-            where: jest.fn().mockResolvedValue(mockIssues),
+            where: jest.fn().mockReturnValue({
+              orderBy: jest.fn().mockResolvedValue(mockIssues),
+            }),
           }),
         };
       });
@@ -238,7 +248,9 @@ describe('IssuesService', () => {
         }
         return {
           from: jest.fn().mockReturnValue({
-            where: jest.fn().mockResolvedValue([]),
+            where: jest.fn().mockReturnValue({
+              orderBy: jest.fn().mockResolvedValue([]),
+            }),
           }),
         };
       });
@@ -258,6 +270,132 @@ describe('IssuesService', () => {
       });
 
       await expect(service.findByProject('INVALID')).rejects.toThrow(NotFoundException);
+    });
+
+    // ===== Story 5.1: filter query composition =====
+
+    // Helper: mocks project lookup + an issues-select whose .where is a spy.
+    // Chain shape: select().from().where().orderBy() — post-5.1 review patch #1.
+    function setupFilterMocks(issuesResult: unknown[] = []) {
+      const orderBySpy = jest.fn().mockResolvedValue(issuesResult);
+      const whereSpy = jest.fn().mockReturnValue({ orderBy: orderBySpy });
+      let selectCallCount = 0;
+      mockDb.select.mockImplementation(() => {
+        selectCallCount++;
+        if (selectCallCount === 1) {
+          return {
+            from: jest.fn().mockReturnValue({
+              where: jest.fn().mockReturnValue({
+                limit: jest.fn().mockResolvedValue([mockProject]),
+              }),
+            }),
+          };
+        }
+        return {
+          from: jest.fn().mockReturnValue({
+            where: whereSpy,
+          }),
+        };
+      });
+      return whereSpy;
+    }
+
+    const uuidA = '11111111-1111-1111-1111-111111111111';
+    const uuidB = '22222222-2222-2222-2222-222222222222';
+
+    it('no filter params → baseline behavior unchanged', async () => {
+      const whereSpy = setupFilterMocks([]);
+      const result = await service.findByProject('MEGA');
+      expect(result).toEqual([]);
+      expect(whereSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('statusId single value → calls where with one condition', async () => {
+      const whereSpy = setupFilterMocks([]);
+      await service.findByProject('MEGA', { statusId: uuidA });
+      expect(whereSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('statusId comma-joined → normalizes to array of two', async () => {
+      const whereSpy = setupFilterMocks([]);
+      await service.findByProject('MEGA', { statusId: `${uuidA},${uuidB}` });
+      expect(whereSpy).toHaveBeenCalled();
+    });
+
+    it('statusId repeated query style → accepted as array input', async () => {
+      const whereSpy = setupFilterMocks([]);
+      await service.findByProject('MEGA', { statusId: [uuidA, uuidB] });
+      expect(whereSpy).toHaveBeenCalled();
+    });
+
+    it('assigneeId=unassigned → triggers isNull branch', async () => {
+      const whereSpy = setupFilterMocks([]);
+      await service.findByProject('MEGA', { assigneeId: 'unassigned' });
+      expect(whereSpy).toHaveBeenCalled();
+    });
+
+    it('assigneeId=unassigned,<uuid> → mixed or(isNull, inArray)', async () => {
+      const whereSpy = setupFilterMocks([]);
+      await service.findByProject('MEGA', { assigneeId: `unassigned,${uuidA}` });
+      expect(whereSpy).toHaveBeenCalled();
+    });
+
+    it('type=bug → single-value enum filter', async () => {
+      const whereSpy = setupFilterMocks([]);
+      await service.findByProject('MEGA', { type: 'bug' });
+      expect(whereSpy).toHaveBeenCalled();
+    });
+
+    it('type is normalized to lowercase', async () => {
+      const whereSpy = setupFilterMocks([]);
+      await service.findByProject('MEGA', { type: 'BUG' });
+      expect(whereSpy).toHaveBeenCalled();
+    });
+
+    it('priority=P1,P2 → two-value enum filter', async () => {
+      const whereSpy = setupFilterMocks([]);
+      await service.findByProject('MEGA', { priority: 'P1,P2' });
+      expect(whereSpy).toHaveBeenCalled();
+    });
+
+    it('createdFrom + createdTo → applies both bounds', async () => {
+      const whereSpy = setupFilterMocks([]);
+      await service.findByProject('MEGA', {
+        createdFrom: '2026-04-01',
+        createdTo: '2026-04-30',
+      });
+      expect(whereSpy).toHaveBeenCalled();
+    });
+
+    it('combined filter (status + priority + date) → still returns', async () => {
+      const whereSpy = setupFilterMocks([]);
+      await service.findByProject('MEGA', {
+        statusId: uuidA,
+        priority: 'P1',
+        createdFrom: '2026-04-01',
+      });
+      expect(whereSpy).toHaveBeenCalled();
+    });
+
+    it('invalid statusId UUID → BadRequestException', async () => {
+      setupFilterMocks([]);
+      await expect(
+        service.findByProject('MEGA', { statusId: 'not-a-uuid' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('invalid date on createdFrom → BadRequestException', async () => {
+      setupFilterMocks([]);
+      await expect(
+        service.findByProject('MEGA', { createdFrom: '2026/04/01' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('invalid type enum → BadRequestException', async () => {
+      setupFilterMocks([]);
+      await expect(
+        service.findByProject('MEGA', { type: 'notatype' }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -397,6 +535,56 @@ describe('IssuesService', () => {
       ).rejects.toThrow(ConflictException);
     });
 
+    it('audit-warns on version mismatch with structured fields', async () => {
+      const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+      setupUpdateMocks(mockProject, []);
+
+      await expect(
+        service.update('MEGA', 'issue-id', { title: 'New', issueVersion: 42 }, userId),
+      ).rejects.toThrow(ConflictException);
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[AUDIT] issue.conflict'),
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('sentVersion=42'),
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining(`userId=${userId}`),
+      );
+      warnSpy.mockRestore();
+    });
+
+    it('concurrent updates: first wins, second receives ConflictException', async () => {
+      // First call: returning resolves with the updated row (version 1 → 2)
+      // Second call: returning resolves empty (stale version 1, current is now 2)
+      let updateCallCount = 0;
+      mockDb.select.mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            limit: jest.fn().mockResolvedValue([mockProject]),
+          }),
+        }),
+      });
+      mockDb.update.mockImplementation(() => {
+        updateCallCount++;
+        return {
+          set: jest.fn().mockReturnValue({
+            where: jest.fn().mockReturnValue({
+              returning: jest.fn().mockResolvedValue(updateCallCount === 1 ? [updatedIssue] : []),
+            }),
+          }),
+        };
+      });
+
+      const first = await service.update('MEGA', 'issue-id', { title: 'A wins', issueVersion: 1 }, 'user-A');
+      expect(first.issueVersion).toBe(2);
+
+      await expect(
+        service.update('MEGA', 'issue-id', { title: 'B loses', issueVersion: 1 }, 'user-B'),
+      ).rejects.toThrow(ConflictException);
+    });
+
     it('throws NotFoundException for non-existent project', async () => {
       setupUpdateMocks(null, []);
 
@@ -430,30 +618,109 @@ describe('IssuesService', () => {
       logSpy.mockRestore();
     });
 
-    it('updates statusId when valid status provided', async () => {
-      // Need extra select for status validation (innerJoin)
+    // Helper: status-changing update() now wraps current-state load + rule
+    // check + UPDATE in a transaction (with SELECT ... FOR UPDATE). Sets up
+    // mockDb.select for the pre-tx path (project, status+workflow) and
+    // mockDb.transaction for the tx body (tx.execute → tx.select[current] →
+    // tx.select[rules] → tx.update). Returns the tx object so tests can
+    // extend `update.returning` to control the result row.
+    function setupStatusUpdateSelects(
+      rules: unknown[] = [],
+      currentIssue: {
+        statusId: string;
+        assigneeId: string | null;
+        resolution?: string | null;
+      } = {
+        statusId: 'old-status',
+        assigneeId: 'user-1',
+        resolution: null,
+      },
+      updateResult: unknown[] | null = null,
+      currentStatusName: string = 'Backlog',
+    ) {
       let selectCallCount = 0;
       mockDb.select.mockImplementation(() => {
         selectCallCount++;
-        if (selectCallCount === 1) return { from: jest.fn().mockReturnValue({ where: jest.fn().mockReturnValue({ limit: jest.fn().mockResolvedValue([mockProject]) }) }) };
-        // Status validation with innerJoin
+        if (selectCallCount === 1) {
+          // Project lookup
+          return {
+            from: jest.fn().mockReturnValue({
+              where: jest.fn().mockReturnValue({
+                limit: jest.fn().mockResolvedValue([mockProject]),
+              }),
+            }),
+          };
+        }
+        // Status+workflow validation (innerJoin)
         return {
           from: jest.fn().mockReturnValue({
             innerJoin: jest.fn().mockReturnValue({
               where: jest.fn().mockReturnValue({
-                limit: jest.fn().mockResolvedValue([{ id: '00000000-0000-0000-0000-000000000099' }]),
+                limit: jest
+                  .fn()
+                  .mockResolvedValue([
+                    { id: '00000000-0000-0000-0000-000000000099', workflowId: 'wf-1' },
+                  ]),
               }),
             }),
           }),
         };
       });
-      mockDb.update.mockReturnValue({
-        set: jest.fn().mockReturnValue({
-          where: jest.fn().mockReturnValue({
-            returning: jest.fn().mockResolvedValue([{ ...updatedIssue, statusId: '00000000-0000-0000-0000-000000000099' }]),
+
+      // Build the tx object used inside db.transaction.
+      // Call order inside the tx body: execute (FOR UPDATE), select(currentIssue),
+      // select(currentStatusName), select(matchingRules), update.
+      let txSelectCount = 0;
+      const tx: any = {
+        execute: jest.fn().mockResolvedValue(undefined),
+        select: jest.fn().mockImplementation(() => {
+          txSelectCount++;
+          if (txSelectCount === 1) {
+            // Current issue
+            return {
+              from: jest.fn().mockReturnValue({
+                where: jest.fn().mockReturnValue({
+                  limit: jest.fn().mockResolvedValue([currentIssue]),
+                }),
+              }),
+            };
+          }
+          if (txSelectCount === 2) {
+            // Current status name lookup
+            return {
+              from: jest.fn().mockReturnValue({
+                where: jest.fn().mockReturnValue({
+                  limit: jest.fn().mockResolvedValue([{ name: currentStatusName }]),
+                }),
+              }),
+            };
+          }
+          // Matching rules
+          return {
+            from: jest.fn().mockReturnValue({
+              where: jest.fn().mockReturnValue({
+                orderBy: jest.fn().mockResolvedValue(rules),
+              }),
+            }),
+          };
+        }),
+        update: jest.fn().mockReturnValue({
+          set: jest.fn().mockReturnValue({
+            where: jest.fn().mockReturnValue({
+              returning: jest.fn().mockResolvedValue(updateResult ?? []),
+            }),
           }),
         }),
-      });
+      };
+      mockDb.transaction = (mockDb as any).transaction ?? jest.fn();
+      (mockDb as any).transaction = jest.fn().mockImplementation(async (cb: any) => cb(tx));
+      return tx;
+    }
+
+    it('updates statusId when valid status provided', async () => {
+      setupStatusUpdateSelects([], { statusId: 'old-status', assigneeId: 'user-1' }, [
+        { ...updatedIssue, statusId: '00000000-0000-0000-0000-000000000099' },
+      ]);
 
       const result = await service.update('MEGA', 'issue-id', {
         statusId: '00000000-0000-0000-0000-000000000099',
@@ -486,32 +753,360 @@ describe('IssuesService', () => {
 
     it('audit logs statusId in changed fields', async () => {
       const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation();
-      let selectCallCount = 0;
-      mockDb.select.mockImplementation(() => {
-        selectCallCount++;
-        if (selectCallCount === 1) return { from: jest.fn().mockReturnValue({ where: jest.fn().mockReturnValue({ limit: jest.fn().mockResolvedValue([mockProject]) }) }) };
-        return {
-          from: jest.fn().mockReturnValue({
-            innerJoin: jest.fn().mockReturnValue({
-              where: jest.fn().mockReturnValue({
-                limit: jest.fn().mockResolvedValue([{ id: '00000000-0000-0000-0000-000000000099' }]),
-              }),
-            }),
-          }),
-        };
-      });
-      mockDb.update.mockReturnValue({
-        set: jest.fn().mockReturnValue({
-          where: jest.fn().mockReturnValue({
-            returning: jest.fn().mockResolvedValue([{ ...updatedIssue, statusId: '00000000-0000-0000-0000-000000000099' }]),
-          }),
-        }),
-      });
+      setupStatusUpdateSelects([], { statusId: 'old-status', assigneeId: 'user-1' }, [
+        { ...updatedIssue, statusId: '00000000-0000-0000-0000-000000000099' },
+      ]);
 
       await service.update('MEGA', 'issue-id', { statusId: '00000000-0000-0000-0000-000000000099', issueVersion: 1 }, userId);
 
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('fields=[statusId]'));
       logSpy.mockRestore();
+    });
+
+    // ===== Story 4.2: Workflow rule enforcement =====
+
+    const ruleRequireAssignee = {
+      id: 'rule-1',
+      fromStatusId: null,
+      toStatusId: '00000000-0000-0000-0000-000000000099',
+      ruleType: 'require_assignee',
+    };
+
+    it('statusId change with no matching rules → succeeds (behavior unchanged)', async () => {
+      setupStatusUpdateSelects([], { statusId: 'old-status', assigneeId: 'user-1' }, [
+        { ...updatedIssue, statusId: '00000000-0000-0000-0000-000000000099' },
+      ]);
+      const result = await service.update(
+        'MEGA',
+        'issue-id',
+        { statusId: '00000000-0000-0000-0000-000000000099', issueVersion: 1 },
+        userId,
+      );
+      expect(result.statusId).toBe('00000000-0000-0000-0000-000000000099');
+    });
+
+    it('require_assignee rule, issue already has assignee → succeeds', async () => {
+      setupStatusUpdateSelects(
+        [ruleRequireAssignee],
+        { statusId: 'old-status', assigneeId: 'user-7' },
+        [{ ...updatedIssue, statusId: '00000000-0000-0000-0000-000000000099', assigneeId: 'user-7' }],
+      );
+      const result = await service.update(
+        'MEGA',
+        'issue-id',
+        { statusId: '00000000-0000-0000-0000-000000000099', issueVersion: 1 },
+        userId,
+      );
+      expect(result.statusId).toBe('00000000-0000-0000-0000-000000000099');
+    });
+
+    it('require_assignee rule, no assignee and PATCH omits it → 422, UPDATE NOT called', async () => {
+      const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+      const tx = setupStatusUpdateSelects(
+        [ruleRequireAssignee],
+        { statusId: 'old-status', assigneeId: null },
+      );
+
+      await expect(
+        service.update(
+          'MEGA',
+          'issue-id',
+          { statusId: '00000000-0000-0000-0000-000000000099', issueVersion: 1 },
+          userId,
+        ),
+      ).rejects.toMatchObject({
+        getStatus: expect.any(Function),
+      });
+
+      expect(tx.update).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[AUDIT] workflowRule.violation'),
+      );
+      warnSpy.mockRestore();
+    });
+
+    it('require_assignee rule, PATCH provides assigneeId → succeeds', async () => {
+      const tx = setupStatusUpdateSelects(
+        [ruleRequireAssignee],
+        { statusId: 'old-status', assigneeId: null },
+        [{ ...updatedIssue, statusId: '00000000-0000-0000-0000-000000000099', assigneeId: '00000000-0000-0000-0000-0000000000aa' }],
+      );
+      const result = await service.update(
+        'MEGA',
+        'issue-id',
+        {
+          statusId: '00000000-0000-0000-0000-000000000099',
+          assigneeId: '00000000-0000-0000-0000-0000000000aa',
+          issueVersion: 1,
+        },
+        userId,
+      );
+      expect(result.assigneeId).toBe('00000000-0000-0000-0000-0000000000aa');
+      expect(tx.update).toHaveBeenCalled();
+    });
+
+    it('two matching rules (from=null and from=current) → only one violation thrown', async () => {
+      const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+      setupStatusUpdateSelects(
+        [
+          { ...ruleRequireAssignee, id: 'rule-a', fromStatusId: null },
+          { ...ruleRequireAssignee, id: 'rule-b', fromStatusId: 'old-status' },
+        ],
+        { statusId: 'old-status', assigneeId: null },
+      );
+
+      let thrown: any = null;
+      try {
+        await service.update(
+          'MEGA',
+          'issue-id',
+          { statusId: '00000000-0000-0000-0000-000000000099', issueVersion: 1 },
+          userId,
+        );
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown).not.toBeNull();
+      // The first rule by orderBy is rule-a (mock returns them in this order).
+      const body = thrown.getResponse();
+      expect(body.rule.id).toBe('rule-a');
+      warnSpy.mockRestore();
+    });
+
+    it('rule with fromStatusId = X does NOT apply when current status = Y', async () => {
+      // Simulate the SQL filter by returning an empty rules array — in prod,
+      // the WHERE clause excludes the non-matching rule.
+      setupStatusUpdateSelects(
+        [],
+        { statusId: 'Y', assigneeId: null },
+        [{ ...updatedIssue, statusId: '00000000-0000-0000-0000-000000000099' }],
+      );
+      const result = await service.update(
+        'MEGA',
+        'issue-id',
+        { statusId: '00000000-0000-0000-0000-000000000099', issueVersion: 1 },
+        userId,
+      );
+      expect(result.statusId).toBe('00000000-0000-0000-0000-000000000099');
+    });
+
+    // ===== Story 4.3: require_field rule type + FR20 reopen =====
+
+    const ruleRequireResolution = {
+      id: 'rule-resolution',
+      fromStatusId: null,
+      toStatusId: '00000000-0000-0000-0000-000000000099',
+      ruleType: 'require_field',
+      requiredField: 'resolution',
+    };
+
+    it('require_field:resolution, PATCH omits resolution → 422, UPDATE NOT called', async () => {
+      const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+      const tx = setupStatusUpdateSelects(
+        [ruleRequireResolution],
+        { statusId: 'old-status', assigneeId: 'user-1', resolution: null },
+      );
+
+      let thrown: any = null;
+      try {
+        await service.update(
+          'MEGA',
+          'issue-id',
+          { statusId: '00000000-0000-0000-0000-000000000099', issueVersion: 1 },
+          userId,
+        );
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown).not.toBeNull();
+      expect(thrown.getStatus()).toBe(422);
+      expect(thrown.getResponse().rule.requiredField).toBe('resolution');
+      expect(tx.update).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('requiredField=resolution'),
+      );
+      warnSpy.mockRestore();
+    });
+
+    it('require_field:resolution, PATCH provides non-empty resolution → succeeds', async () => {
+      const tx = setupStatusUpdateSelects(
+        [ruleRequireResolution],
+        { statusId: 'old-status', assigneeId: 'user-1', resolution: null },
+        [{ ...updatedIssue, statusId: '00000000-0000-0000-0000-000000000099' }],
+      );
+      const result = await service.update(
+        'MEGA',
+        'issue-id',
+        {
+          statusId: '00000000-0000-0000-0000-000000000099',
+          resolution: 'Fixed by redeploy',
+          issueVersion: 1,
+        },
+        userId,
+      );
+      expect(result.statusId).toBe('00000000-0000-0000-0000-000000000099');
+      expect(tx.update).toHaveBeenCalled();
+    });
+
+    it('require_field:resolution, PATCH provides whitespace-only resolution → 422', async () => {
+      const tx = setupStatusUpdateSelects(
+        [ruleRequireResolution],
+        { statusId: 'old-status', assigneeId: 'user-1', resolution: null },
+      );
+
+      let thrown: any = null;
+      try {
+        await service.update(
+          'MEGA',
+          'issue-id',
+          {
+            statusId: '00000000-0000-0000-0000-000000000099',
+            resolution: '   ',
+            issueVersion: 1,
+          },
+          userId,
+        );
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown?.getStatus()).toBe(422);
+      expect(tx.update).not.toHaveBeenCalled();
+    });
+
+    it('FR20: reopen from Done → updateData sets resolution=null and statusChangedAt', async () => {
+      const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation();
+      let capturedSetArgs: any = null;
+      const tx = setupStatusUpdateSelects(
+        [],
+        { statusId: 'done-status', assigneeId: 'user-1', resolution: 'Was resolved' },
+        [{ ...updatedIssue, statusId: '00000000-0000-0000-0000-000000000099' }],
+        'Done',
+      );
+      // Replace tx.update with a spy that captures the .set() args
+      tx.update = jest.fn().mockReturnValue({
+        set: jest.fn().mockImplementation((args: any) => {
+          capturedSetArgs = args;
+          return {
+            where: jest.fn().mockReturnValue({
+              returning: jest.fn().mockResolvedValue([
+                { ...updatedIssue, statusId: '00000000-0000-0000-0000-000000000099' },
+              ]),
+            }),
+          };
+        }),
+      });
+
+      await service.update(
+        'MEGA',
+        'issue-id',
+        { statusId: '00000000-0000-0000-0000-000000000099', issueVersion: 1 },
+        userId,
+      );
+
+      expect(capturedSetArgs).not.toBeNull();
+      expect(capturedSetArgs.resolution).toBeNull();
+      expect(capturedSetArgs.statusChangedAt).toBeInstanceOf(Date);
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[AUDIT] issue.reopened'),
+      );
+      logSpy.mockRestore();
+    });
+
+    it('normal status change (not reopen) → resolution unchanged, statusChangedAt bumped', async () => {
+      let capturedSetArgs: any = null;
+      const tx = setupStatusUpdateSelects(
+        [],
+        { statusId: 'old-status', assigneeId: 'user-1', resolution: 'prior value' },
+        [{ ...updatedIssue, statusId: '00000000-0000-0000-0000-000000000099' }],
+        'Backlog',
+      );
+      tx.update = jest.fn().mockReturnValue({
+        set: jest.fn().mockImplementation((args: any) => {
+          capturedSetArgs = args;
+          return {
+            where: jest.fn().mockReturnValue({
+              returning: jest.fn().mockResolvedValue([
+                { ...updatedIssue, statusId: '00000000-0000-0000-0000-000000000099' },
+              ]),
+            }),
+          };
+        }),
+      });
+
+      await service.update(
+        'MEGA',
+        'issue-id',
+        { statusId: '00000000-0000-0000-0000-000000000099', issueVersion: 1 },
+        userId,
+      );
+
+      // resolution should NOT be touched (no explicit set)
+      expect(capturedSetArgs.resolution).toBeUndefined();
+      // statusChangedAt should be bumped on every status change
+      expect(capturedSetArgs.statusChangedAt).toBeInstanceOf(Date);
+    });
+
+    it('coexisting rules: assignee-missing fires before resolution-missing (by createdAt order)', async () => {
+      const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+      setupStatusUpdateSelects(
+        [
+          // First rule (by createdAt order from the mock queue): assignee
+          {
+            id: 'rule-a',
+            fromStatusId: null,
+            toStatusId: '00000000-0000-0000-0000-000000000099',
+            ruleType: 'require_assignee',
+            requiredField: null,
+          },
+          // Second rule: resolution
+          ruleRequireResolution,
+        ],
+        { statusId: 'old-status', assigneeId: null, resolution: null },
+      );
+
+      let thrown: any = null;
+      try {
+        await service.update(
+          'MEGA',
+          'issue-id',
+          { statusId: '00000000-0000-0000-0000-000000000099', issueVersion: 1 },
+          userId,
+        );
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown?.getResponse().rule.ruleType).toBe('require_assignee');
+      warnSpy.mockRestore();
+    });
+
+    it('violation exception carries structured rule payload in response body', async () => {
+      setupStatusUpdateSelects(
+        [ruleRequireAssignee],
+        { statusId: 'old-status', assigneeId: null },
+      );
+
+      let thrown: any = null;
+      try {
+        await service.update(
+          'MEGA',
+          'issue-id',
+          { statusId: '00000000-0000-0000-0000-000000000099', issueVersion: 1 },
+          userId,
+        );
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown).not.toBeNull();
+      expect(thrown.getStatus()).toBe(422);
+      const body = thrown.getResponse();
+      expect(body.error).toBe('WorkflowRuleViolation');
+      expect(body.rule).toEqual({
+        id: 'rule-1',
+        ruleType: 'require_assignee',
+        requiredField: 'assigneeId',
+        fromStatusId: null,
+        toStatusId: '00000000-0000-0000-0000-000000000099',
+      });
     });
   });
 
@@ -810,6 +1405,23 @@ describe('IssuesService', () => {
       ).rejects.toThrow(ConflictException);
     });
 
+    it('audit-warns on softDelete version mismatch', async () => {
+      const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+      setupDeleteMocks(mockProject, []);
+
+      await expect(
+        service.softDelete('MEGA', 'issue-id', 7, userId),
+      ).rejects.toThrow(ConflictException);
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[AUDIT] issue.conflict'),
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('sentVersion=7'),
+      );
+      warnSpy.mockRestore();
+    });
+
     it('throws NotFoundException for non-existent project', async () => {
       setupDeleteMocks(null, []);
 
@@ -831,6 +1443,224 @@ describe('IssuesService', () => {
         expect.stringContaining('issueKey=MEGA-1'),
       );
       logSpy.mockRestore();
+    });
+  });
+
+  describe('EventService integration', () => {
+    it('calls emitIssueCreated after successful create', async () => {
+      const mockIssue = {
+        id: 'issue-id',
+        issueKey: 'MEGA-1',
+        title: 'Fix login bug',
+        type: 'bug',
+        priority: 'P3',
+        statusId: 'status-id',
+        assigneeId: null,
+        reporterId: userId,
+        parentId: null,
+        issueVersion: 1,
+        createdAt: new Date(),
+      };
+
+      setupProjectLookup(mockProject);
+      setupCreateTransaction(mockIssue);
+      jest.spyOn(Logger.prototype, 'log').mockImplementation();
+
+      await service.create(validDto, userId, 'MEGA');
+
+      expect(mockEventService.emitIssueCreated).toHaveBeenCalledWith(
+        'MEGA',
+        expect.objectContaining({
+          actorId: userId,
+          timestamp: expect.any(String),
+        }),
+      );
+    });
+
+    it('calls emitIssueMoved after statusId update', async () => {
+      const updatedIssue = {
+        id: 'issue-id',
+        issueKey: 'MEGA-1',
+        title: 'Test',
+        statusId: 'a0000000-0000-0000-0000-000000000002',
+        issueVersion: 2,
+        description: null,
+        type: 'bug',
+        priority: 'P3',
+        assigneeId: null,
+        reporterId: userId,
+        parentId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      // Pre-tx selects: project, status+workflow
+      let selectCallCount = 0;
+      mockDb.select.mockImplementation(() => {
+        selectCallCount++;
+        if (selectCallCount === 1) {
+          return {
+            from: jest.fn().mockReturnValue({
+              where: jest.fn().mockReturnValue({
+                limit: jest.fn().mockResolvedValue([mockProject]),
+              }),
+            }),
+          };
+        }
+        return {
+          from: jest.fn().mockReturnValue({
+            innerJoin: jest.fn().mockReturnValue({
+              where: jest.fn().mockReturnValue({
+                limit: jest
+                  .fn()
+                  .mockResolvedValue([{ id: 'a0000000-0000-0000-0000-000000000002', workflowId: 'wf-1' }]),
+              }),
+            }),
+          }),
+        };
+      });
+
+      // Tx body: currentIssue → currentStatusName → rules → update
+      let txSelectCount = 0;
+      const tx: any = {
+        execute: jest.fn().mockResolvedValue(undefined),
+        select: jest.fn().mockImplementation(() => {
+          txSelectCount++;
+          if (txSelectCount === 1) {
+            return {
+              from: jest.fn().mockReturnValue({
+                where: jest.fn().mockReturnValue({
+                  limit: jest.fn().mockResolvedValue([{ statusId: 'old-status', assigneeId: 'u1', resolution: null }]),
+                }),
+              }),
+            };
+          }
+          if (txSelectCount === 2) {
+            return {
+              from: jest.fn().mockReturnValue({
+                where: jest.fn().mockReturnValue({
+                  limit: jest.fn().mockResolvedValue([{ name: 'Backlog' }]),
+                }),
+              }),
+            };
+          }
+          return {
+            from: jest.fn().mockReturnValue({
+              where: jest.fn().mockReturnValue({
+                orderBy: jest.fn().mockResolvedValue([]),
+              }),
+            }),
+          };
+        }),
+        update: jest.fn().mockReturnValue({
+          set: jest.fn().mockReturnValue({
+            where: jest.fn().mockReturnValue({
+              returning: jest.fn().mockResolvedValue([updatedIssue]),
+            }),
+          }),
+        }),
+      };
+      mockDb.transaction.mockImplementation(async (cb: any) => cb(tx));
+
+      jest.spyOn(Logger.prototype, 'log').mockImplementation();
+
+      await service.update('MEGA', 'issue-id', { statusId: 'a0000000-0000-0000-0000-000000000002', issueVersion: 1 }, userId);
+
+      expect(mockEventService.emitIssueMoved).toHaveBeenCalledWith(
+        'MEGA',
+        expect.objectContaining({
+          issueId: 'issue-id',
+          statusId: 'a0000000-0000-0000-0000-000000000002',
+          actorId: userId,
+        }),
+      );
+    });
+
+    it('calls emitIssueUpdated for non-status field updates', async () => {
+      const updatedIssue = {
+        id: 'issue-id',
+        issueKey: 'MEGA-1',
+        title: 'Updated title',
+        statusId: 'status-id',
+        issueVersion: 2,
+        description: null,
+        type: 'bug',
+        priority: 'P3',
+        assigneeId: null,
+        reporterId: userId,
+        parentId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      mockDb.select.mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            limit: jest.fn().mockResolvedValue([mockProject]),
+          }),
+        }),
+      });
+
+      mockDb.update.mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            returning: jest.fn().mockResolvedValue([updatedIssue]),
+          }),
+        }),
+      });
+
+      jest.spyOn(Logger.prototype, 'log').mockImplementation();
+
+      await service.update('MEGA', 'issue-id', { title: 'Updated title', issueVersion: 1 }, userId);
+
+      expect(mockEventService.emitIssueUpdated).toHaveBeenCalledWith(
+        'MEGA',
+        expect.objectContaining({
+          issueId: 'issue-id',
+          fields: { title: 'Updated title' },
+          actorId: userId,
+        }),
+      );
+    });
+
+    it('calls emitIssueDeleted after soft delete', async () => {
+      const deletedIssue = {
+        id: 'issue-id',
+        issueKey: 'MEGA-1',
+        title: 'Test',
+        type: 'bug',
+        priority: 'P3',
+        issueVersion: 2,
+        deletedAt: new Date(),
+      };
+
+      mockDb.select.mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            limit: jest.fn().mockResolvedValue([mockProject]),
+          }),
+        }),
+      });
+
+      mockDb.update.mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            returning: jest.fn().mockResolvedValue([deletedIssue]),
+          }),
+        }),
+      });
+
+      jest.spyOn(Logger.prototype, 'log').mockImplementation();
+
+      await service.softDelete('MEGA', 'issue-id', 1, userId);
+
+      expect(mockEventService.emitIssueDeleted).toHaveBeenCalledWith(
+        'MEGA',
+        expect.objectContaining({
+          issueId: 'issue-id',
+          actorId: userId,
+        }),
+      );
     });
   });
 });

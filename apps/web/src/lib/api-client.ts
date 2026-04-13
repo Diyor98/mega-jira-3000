@@ -1,7 +1,7 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
 
 interface RequestOptions extends RequestInit {
-  params?: Record<string, string>;
+  params?: Record<string, string | string[] | undefined | null>;
 }
 
 async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
@@ -9,8 +9,14 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
 
   let url = `${API_BASE_URL}${endpoint}`;
   if (params) {
-    const searchParams = new URLSearchParams(params);
-    url += `?${searchParams.toString()}`;
+    const parts: string[] = [];
+    for (const [k, v] of Object.entries(params)) {
+      if (v === undefined || v === null) continue;
+      const joined = Array.isArray(v) ? v.filter((x) => x !== undefined && x !== null && x !== '').join(',') : v;
+      if (joined === '') continue;
+      parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(joined)}`);
+    }
+    if (parts.length > 0) url += `?${parts.join('&')}`;
   }
 
   let response: Response;

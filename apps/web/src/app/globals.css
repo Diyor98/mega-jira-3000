@@ -62,3 +62,30 @@ body {
   background: var(--color-surface-0);
   color: var(--color-text-primary);
 }
+
+@keyframes remote-update-pulse {
+  0% { background-color: rgba(37, 99, 235, 0.15); }
+  100% { background-color: transparent; }
+}
+
+.animate-remote-pulse {
+  animation: remote-update-pulse 1s ease-out;
+}
+
+@keyframes reconnecting-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.animate-reconnecting {
+  animation: reconnecting-pulse 2s ease-in-out infinite;
+}
+
+@keyframes slide-down {
+  0% { opacity: 0; transform: translateY(-8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-down {
+  animation: slide-down 200ms ease-out;
+}

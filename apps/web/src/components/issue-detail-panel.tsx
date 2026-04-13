@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { ISSUE_PRIORITIES, ISSUE_TYPES } from '@mega-jira/shared';
 import { apiClient } from '../lib/api-client';
+import { ConflictNotification } from './conflict-notification';
+import { CommentThread } from './comment-thread';
 
 interface IssueDetail {
   id: string;
@@ -16,6 +18,7 @@ interface IssueDetail {
   reporterId: string;
   parentId: string | null;
   issueVersion: number;
+  resolution: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -62,9 +65,10 @@ interface IssueDetailPanelProps {
   issueId: string;
   onClose: () => void;
   onDeleted?: () => void;
+  users?: Array<{ id: string; email: string }>;
 }
 
-export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted }: IssueDetailPanelProps) {
+export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted, users = [] }: IssueDetailPanelProps) {
   const [issue, setIssue] = useState<IssueDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -79,8 +83,13 @@ export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted }: Is
   const [linkRefreshKey, setLinkRefreshKey] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [conflict, setConflict] = useState<{ field: string; draftValue: string } | null>(null);
 
   useEffect(() => {
+    setConflict(null);
+    setSaveError(null);
+    setEditingField(null);
+    setEditDraft('');
     async function load() {
       try {
         const data = await apiClient.get<IssueDetail>(
@@ -130,6 +139,7 @@ export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted }: Is
 
   async function saveField(field: string, value: string | null) {
     if (!issue || saving) return;
+    const capturedDraft = String(value ?? '');
     setSaveError(null);
     setSaving(true);
 
@@ -139,15 +149,34 @@ export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted }: Is
         { [field]: value, issueVersion: issue.issueVersion },
       );
       if (updated) setIssue(updated);
+      setConflict(null);
     } catch (err: unknown) {
       const error = err as { code?: number; message?: string };
       if (error.code === 409) {
-        setSaveError('Modified by another user. Refresh to see changes.');
+        setConflict({ field, draftValue: capturedDraft });
       } else {
         setSaveError(error.message ?? 'Failed to save');
       }
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function reviewConflict() {
+    try {
+      const fresh = await apiClient.get<IssueDetail>(
+        `/projects/${projectKey}/issues/${issueId}`,
+      );
+      if (fresh) {
+        setIssue(fresh);
+        setConflict(null);
+        setEditingField(null);
+        setEditDraft('');
+      }
+    } catch (err: unknown) {
+      // Refetch failed — preserve draft and notification, surface a hint via saveError.
+      const error = err as { message?: string };
+      setSaveError(error.message ?? 'Could not refresh — your unsaved value is preserved.');
     }
   }
 
@@ -231,7 +260,18 @@ export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted }: Is
         </button>
       </div>
 
-      {/* Save Error */}
+      {/* Conflict notification (calm, collaboration tone) */}
+      {conflict && (
+        <div className="mx-6 mt-3">
+          <ConflictNotification
+            draftValue={conflict.draftValue}
+            onReviewChanges={reviewConflict}
+            onDismiss={() => setConflict(null)}
+          />
+        </div>
+      )}
+
+      {/* Save Error (non-conflict failures only) */}
       {saveError && (
         <div className="mx-6 mt-3 text-sm text-[var(--color-status-red)] bg-[#FEE2E2] rounded p-2">
           {saveError}
@@ -367,6 +407,18 @@ export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted }: Is
           </p>
         )}
       </div>
+
+      {/* Resolution (read-only; set via WorkflowPrompt on Done transition) */}
+      {issue.resolution && issue.resolution.trim().length > 0 && (
+        <div className="px-6 py-3 border-t border-[var(--color-surface-3)]">
+          <h3 className="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wide mb-2">
+            Resolution
+          </h3>
+          <p className="text-sm text-[var(--color-text-primary)] whitespace-pre-wrap">
+            {issue.resolution}
+          </p>
+        </div>
+      )}
 
       {/* Create Bug from Story */}
       {issue.type === 'story' && (
@@ -524,6 +576,9 @@ export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted }: Is
           </button>
         )}
       </div>
+
+      {/* Comments thread (Story 6.1) */}
+      <CommentThread projectKey={projectKey} issueId={issue.id} users={users} />
     </div>
   );
 }
