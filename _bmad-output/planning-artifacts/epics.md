@@ -437,7 +437,7 @@ As a **team member**, I want notifications for assignments, mentions, and status
 ### Story 6.4: Notification Preferences
 
 As a **team member**, I want to configure notification types, So that I'm not overwhelmed.
-
+sdf
 **Acceptance Criteria:**
 
 **Given** I toggle off "Status Changes" in settings **Then** I no longer receive those notifications per FR32 **And** toast confirms "Preferences saved" per UX-DR12

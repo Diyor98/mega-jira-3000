@@ -22,6 +22,7 @@ import { issueListQuerySchema, type IssueListQuery } from '@mega-jira/shared';
 import { createIssueLinkSchema, type CreateIssueLinkDto } from './dto/create-issue-link.dto';
 import { issueLinks } from '../../database/schema/issue-links';
 import { EventService } from '../board/event.service';
+import { NotificationsService, type NotificationInsertRow } from '../notifications/notifications.service';
 
 const PG_UNIQUE_VIOLATION = '23505';
 
@@ -39,6 +40,7 @@ export class IssuesService {
   constructor(
     @Inject(DATABASE_TOKEN) private readonly db: Database,
     private readonly eventService: EventService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(dto: CreateIssueDto, userId: string, projectKey: string) {
@@ -170,6 +172,20 @@ export class IssuesService {
     });
 
     this.logger.log(`[AUDIT] issue.created | userId=${userId} | issueKey=${issue.issueKey}`);
+
+    // Story 6.3: if the new issue was created with an initial assignee who is
+    // not the reporter, notify them.
+    const createdIssue = issue as unknown as { id: string; assigneeId: string | null };
+    if (createdIssue.assigneeId && createdIssue.assigneeId !== userId) {
+      await this.notificationsService.createBulk(this.db, [
+        {
+          userId: createdIssue.assigneeId,
+          type: 'assigned',
+          issueId: createdIssue.id,
+          actorId: userId,
+        },
+      ]);
+    }
 
     this.eventService.emitIssueCreated(projectKey, {
       issue: issue as unknown as Record<string, unknown>,
@@ -492,6 +508,25 @@ export class IssuesService {
       return this.findById(projectKey, issueId);
     }
 
+    // Story 6.3: snapshot pre-update assigneeId so the notification trigger
+    // can detect whether the value actually changed (a PATCH re-sending the
+    // same assigneeId must not fire a spurious notification).
+    let previousAssigneeId: string | null = null;
+    if (fieldsToUpdate.assigneeId !== undefined) {
+      const [pre] = await this.db
+        .select({ assigneeId: issues.assigneeId })
+        .from(issues)
+        .where(
+          and(
+            eq(issues.id, issueId),
+            eq(issues.projectId, project.id),
+            isNull(issues.deletedAt),
+          ),
+        )
+        .limit(1);
+      previousAssigneeId = pre?.assigneeId ?? null;
+    }
+
     const returningCols = {
       id: issues.id,
       issueKey: issues.issueKey,
@@ -682,6 +717,47 @@ export class IssuesService {
     }
 
     this.logger.log(`[AUDIT] issue.updated | userId=${userId} | issueKey=${updated.issueKey} | fields=[${changedFields.join(',')}]`);
+
+    // Story 6.3 triggers: build a recipient set for assigned / status_changed
+    // notifications. Best-effort — any failure is swallowed inside
+    // `createBulk` so the update's primary result is unaffected.
+    const notifyRows: NotificationInsertRow[] = [];
+    // Value-change guard: a PATCH that re-sends the same assigneeId must not
+    // fire a spurious notification. `previousAssigneeId` was loaded in the
+    // pre-update fetch just above the optimistic UPDATE.
+    if (
+      changedFields.includes('assigneeId') &&
+      updated.assigneeId &&
+      updated.assigneeId !== userId &&
+      updated.assigneeId !== previousAssigneeId
+    ) {
+      notifyRows.push({
+        userId: updated.assigneeId,
+        type: 'assigned',
+        issueId: updated.id,
+        actorId: userId,
+      });
+    }
+    if (changedFields.includes('statusId')) {
+      const recipients = new Set<string>();
+      if (updated.reporterId && updated.reporterId !== userId) {
+        recipients.add(updated.reporterId);
+      }
+      if (updated.assigneeId && updated.assigneeId !== userId) {
+        recipients.add(updated.assigneeId);
+      }
+      for (const recipient of recipients) {
+        notifyRows.push({
+          userId: recipient,
+          type: 'status_changed',
+          issueId: updated.id,
+          actorId: userId,
+        });
+      }
+    }
+    if (notifyRows.length > 0) {
+      await this.notificationsService.createBulk(this.db, notifyRows);
+    }
 
     if (reopenedFromDone) {
       this.logger.log(

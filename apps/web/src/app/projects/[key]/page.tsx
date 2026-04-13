@@ -23,6 +23,8 @@ import { useWebSocket } from '../../../hooks/use-websocket';
 import { ConflictNotification } from '../../../components/conflict-notification';
 import { WorkflowPrompt, type WorkflowPromptRule } from '../../../components/workflow-prompt';
 import { FilterBar, EMPTY_FILTER, hasAnyFilter, type FilterValue, type FilterPreset } from '../../../components/filter-bar';
+import { NotificationBell } from '../../../components/notification-bell';
+import { ToastProvider } from '../../../components/toast';
 
 function parseFilterFromSearch(sp: URLSearchParams): FilterValue {
   const splitCsv = (v: string | null) => (v ? v.split(',').filter(Boolean) : []);
@@ -227,7 +229,12 @@ export default function ProjectPage() {
   const [statuses, setStatuses] = useState<Status[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+  // Initialize selectedIssueId from a `?issue=<id>` query param (deep-link
+  // from NotificationBell rows). Read once on first render; the mount-time
+  // effect below strips the param so a reload doesn't re-open the same issue.
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(
+    () => searchParams.get('issue'),
+  );
   const [epicProgress, setEpicProgress] = useState<Record<string, number>>({});
   const [activeIssue, setActiveIssue] = useState<Issue | null>(null);
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
@@ -395,6 +402,22 @@ export default function ProjectPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Deep-link watcher: whenever `?issue=` appears in the URL (either on first
+  // load, or on a same-project notification click that `router.replace`s to
+  // the same route with a new query string), open the detail panel for that
+  // issue and then strip the param so a reload doesn't re-open the same one.
+  // This runs on every searchParams change so subsequent notification clicks
+  // against the currently-mounted page also work.
+  useEffect(() => {
+    const issueParam = searchParams.get('issue');
+    if (!issueParam) return;
+    setSelectedIssueId(issueParam);
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete('issue');
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [searchParams, router, pathname]);
 
   // Load users once on mount for the workflow prompt assignee dropdown.
   useEffect(() => {
@@ -694,6 +717,7 @@ export default function ProjectPage() {
   }
 
   return (
+    <ToastProvider>
     <div className="flex-1 p-6 flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <div>
@@ -705,6 +729,7 @@ export default function ProjectPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <NotificationBell />
           <Link
             href={`/projects/${projectKey}/settings`}
             className="px-3 py-1.5 text-sm font-medium rounded border border-[var(--color-surface-3)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)] transition-colors"
@@ -848,5 +873,6 @@ export default function ProjectPage() {
         )}
       </SlideOverPanel>
     </div>
+    </ToastProvider>
   );
 }

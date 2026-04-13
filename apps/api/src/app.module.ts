@@ -10,6 +10,7 @@ import { WorkflowModule } from './modules/workflow/workflow.module';
 import { UsersModule } from './modules/users/users.module';
 import { FilterPresetsModule } from './modules/filter-presets/filter-presets.module';
 import { CommentsModule } from './modules/comments/comments.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { CommentsModule } from './modules/comments/comments.module';
     UsersModule,
     FilterPresetsModule,
     CommentsModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}

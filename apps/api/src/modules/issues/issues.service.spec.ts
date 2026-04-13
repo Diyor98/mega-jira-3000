@@ -8,6 +8,10 @@ const mockEventService = {
   emitIssueDeleted: jest.fn(),
 };
 
+const mockNotificationsService = {
+  createBulk: jest.fn().mockResolvedValue(undefined),
+};
+
 describe('IssuesService', () => {
   let service: IssuesService;
   let mockDb: {
@@ -97,7 +101,11 @@ describe('IssuesService', () => {
       transaction: jest.fn(),
     };
     jest.clearAllMocks();
-    service = new IssuesService(mockDb as never, mockEventService as never);
+    service = new IssuesService(
+      mockDb as never,
+      mockEventService as never,
+      mockNotificationsService as never,
+    );
   });
 
   describe('create', () => {
@@ -651,17 +659,31 @@ describe('IssuesService', () => {
             }),
           };
         }
-        // Status+workflow validation (innerJoin)
+        if (selectCallCount === 2) {
+          // Status+workflow validation (innerJoin)
+          return {
+            from: jest.fn().mockReturnValue({
+              innerJoin: jest.fn().mockReturnValue({
+                where: jest.fn().mockReturnValue({
+                  limit: jest
+                    .fn()
+                    .mockResolvedValue([
+                      { id: '00000000-0000-0000-0000-000000000099', workflowId: 'wf-1' },
+                    ]),
+                }),
+              }),
+            }),
+          };
+        }
+        // Story 6.3 review patch: pre-update assigneeId snapshot (only runs
+        // when the PATCH body includes assigneeId — tests that set an
+        // assigneeId reach this select, tests that don't never call it).
         return {
           from: jest.fn().mockReturnValue({
-            innerJoin: jest.fn().mockReturnValue({
-              where: jest.fn().mockReturnValue({
-                limit: jest
-                  .fn()
-                  .mockResolvedValue([
-                    { id: '00000000-0000-0000-0000-000000000099', workflowId: 'wf-1' },
-                  ]),
-              }),
+            where: jest.fn().mockReturnValue({
+              limit: jest
+                .fn()
+                .mockResolvedValue([{ assigneeId: currentIssue.assigneeId }]),
             }),
           }),
         };
@@ -761,6 +783,111 @@ describe('IssuesService', () => {
 
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('fields=[statusId]'));
       logSpy.mockRestore();
+    });
+
+    // ===== Story 6.3: notification triggers =====
+
+    it('assigneeId change to a non-caller fires an `assigned` notification', async () => {
+      jest.clearAllMocks();
+      const newAssignee = '00000000-0000-0000-0000-0000000000aa';
+      const callerUuid = '00000000-0000-0000-0000-000000000caa';
+      const changedIssue = { ...updatedIssue, assigneeId: newAssignee };
+      mockDb.select.mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            limit: jest.fn().mockResolvedValue([mockProject]),
+          }),
+        }),
+      });
+      mockDb.update.mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            returning: jest.fn().mockResolvedValue([changedIssue]),
+          }),
+        }),
+      });
+
+      await service.update(
+        'MEGA',
+        'issue-id',
+        { assigneeId: newAssignee, issueVersion: 1 },
+        callerUuid,
+      );
+
+      expect(mockNotificationsService.createBulk).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.arrayContaining([
+          expect.objectContaining({
+            userId: newAssignee,
+            type: 'assigned',
+            actorId: callerUuid,
+          }),
+        ]),
+      );
+    });
+
+    it('self-assignment does NOT fire a notification', async () => {
+      jest.clearAllMocks();
+      // Caller id must be a valid UUID for the Zod assigneeId check.
+      const callerUuid = '00000000-0000-0000-0000-000000000caa';
+      const selfAssigned = { ...updatedIssue, assigneeId: callerUuid };
+      mockDb.select.mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            limit: jest.fn().mockResolvedValue([mockProject]),
+          }),
+        }),
+      });
+      mockDb.update.mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            returning: jest.fn().mockResolvedValue([selfAssigned]),
+          }),
+        }),
+      });
+
+      await service.update(
+        'MEGA',
+        'issue-id',
+        { assigneeId: callerUuid, issueVersion: 1 },
+        callerUuid,
+      );
+
+      // Strict assertion — a regression that called createBulk with a
+      // non-empty array would silently pass under a loose `if (calls.length > 0)`
+      // guard. Be explicit: the call either never happened OR happened with [].
+      const calls = mockNotificationsService.createBulk.mock.calls;
+      const lastRows = calls.length > 0 ? calls[calls.length - 1][1] : [];
+      expect(lastRows).toEqual([]);
+    });
+
+    it('status change notifies reporter + assignee, deduped, excluding caller', async () => {
+      jest.clearAllMocks();
+      const reporterId = '00000000-0000-0000-0000-0000000000rr';
+      const assigneeId = '00000000-0000-0000-0000-0000000000bb';
+      const statusChanged = {
+        ...updatedIssue,
+        reporterId,
+        assigneeId,
+        statusId: '00000000-0000-0000-0000-000000000099',
+      };
+      setupStatusUpdateSelects([], { statusId: 'old-status', assigneeId }, [
+        statusChanged,
+      ]);
+
+      await service.update(
+        'MEGA',
+        'issue-id',
+        { statusId: '00000000-0000-0000-0000-000000000099', issueVersion: 1 },
+        userId,
+      );
+
+      const calls = mockNotificationsService.createBulk.mock.calls;
+      const allRows = calls.flatMap((c: any[]) => c[1]);
+      const recipients = allRows.map((r: any) => r.userId).sort();
+      expect(recipients).toEqual([assigneeId, reporterId].sort());
+      // Every row must be a status_changed notification (no stray assigned).
+      expect(allRows.every((r: any) => r.type === 'status_changed')).toBe(true);
     });
 
     // ===== Story 4.2: Workflow rule enforcement =====

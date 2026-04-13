@@ -3,6 +3,7 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
+import { remarkMentions } from '../lib/remark-mentions';
 
 /**
  * Custom sanitize schema derived from `defaultSchema` but with every
@@ -28,19 +29,42 @@ export function Markdown({ children }: { children: string }) {
   return (
     <div className="md-content text-sm text-[var(--color-text-primary)] leading-relaxed">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkMentions]}
         rehypePlugins={[[rehypeSanitize, commentSchema]]}
         components={{
-          a: ({ href, children: linkChildren }) => (
-            <a
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[var(--color-accent-blue)] underline hover:no-underline"
-            >
-              {linkChildren}
-            </a>
-          ),
+          a: ({ href, title, children: linkChildren }) => {
+            // Mention pill: the remark-mentions plugin renders mentions as
+            // `link` nodes with `url="#mention-<handle>"` AND text children
+            // starting with `@`. Gate the pill on BOTH — a user-authored
+            // Markdown link like `[click me](#mention-admin)` has matching
+            // href but its text doesn't start with `@`, so it renders as a
+            // normal link instead of a spoofed pill.
+            const firstChild = Array.isArray(linkChildren)
+              ? linkChildren[0]
+              : linkChildren;
+            const textStartsWithAt =
+              typeof firstChild === 'string' && firstChild.startsWith('@');
+            if (href && href.startsWith('#mention-') && textStartsWithAt) {
+              return (
+                <span
+                  className="inline-block px-1.5 py-0.5 rounded bg-[var(--color-issue-story-bg)] text-[var(--color-issue-story-text)] text-xs font-medium"
+                  title={title ?? undefined}
+                >
+                  {linkChildren}
+                </span>
+              );
+            }
+            return (
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[var(--color-accent-blue)] underline hover:no-underline"
+              >
+                {linkChildren}
+              </a>
+            );
+          },
           code: ({ children: codeChildren, className }) => {
             const isBlock = className?.startsWith('language-');
             if (isBlock) {

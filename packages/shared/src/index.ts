@@ -43,3 +43,8 @@ export { createIssueLinkSchema } from './schemas/issue-link.schema';
 export type { CreateIssueLinkInput } from './schemas/issue-link.schema';
 export { createCommentSchema } from './schemas/comment.schema';
 export type { CreateCommentInput } from './schemas/comment.schema';
+export { updateNotificationPreferencesSchema } from './schemas/notification.schema';
+export type {
+  UpdateNotificationPreferencesInput,
+  NotificationPreferencesDto,
+} from './schemas/notification.schema';

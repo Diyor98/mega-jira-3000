@@ -186,6 +186,9 @@ importers:
       '@mega-jira/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@types/mdast':
+        specifier: ^4.0.4
+        version: 4.0.4
       next:
         specifier: 16.2.3
         version: 16.2.3(@babel/core@7.29.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -207,6 +210,9 @@ importers:
       socket.io-client:
         specifier: ^4.8.3
         version: 4.8.3
+      unist-util-visit:
+        specifier: ^5.1.0
+        version: 5.1.0
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4

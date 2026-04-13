@@ -5,6 +5,7 @@ import { apiClient } from '../lib/api-client';
 import { acquireSocket, releaseSocket } from '../lib/socket-client';
 import { relativeTime } from '../lib/relative-time';
 import { Markdown } from './markdown';
+import { MentionAutocomplete } from './mention-autocomplete';
 
 interface Comment {
   id: string;
@@ -13,6 +14,7 @@ interface Comment {
   body: string;
   createdAt: string;
   updatedAt: string;
+  mentions?: Array<{ userId: string; email: string }>;
 }
 
 interface CommentThreadProps {
@@ -30,6 +32,31 @@ export function CommentThread({ projectKey, issueId, users }: CommentThreadProps
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+
+  // Detect whether the cursor sits inside an `@handle` token. Returns the
+  // partial handle if so, or null. Used to open/close the autocomplete.
+  function getMentionContext(value: string, cursor: number): string | null {
+    // Walk backwards from cursor looking for '@', stopping at whitespace or
+    // any non-handle char. If we find '@' with only [a-z0-9._-] chars after it
+    // (up to cursor) AND a valid boundary char (or start-of-string) before it,
+    // we're inside a mention.
+    let i = cursor - 1;
+    while (i >= 0) {
+      const ch = value[i];
+      if (ch === '@') {
+        // Check boundary before the '@'.
+        const prev = i > 0 ? value[i - 1] : '';
+        if (i === 0 || !/[a-z0-9._-]/i.test(prev)) {
+          return value.slice(i + 1, cursor);
+        }
+        return null;
+      }
+      if (!/[a-z0-9._-]/i.test(ch)) return null;
+      i--;
+    }
+    return null;
+  }
 
   // ---- load ----
   useEffect(() => {
@@ -114,14 +141,71 @@ export function CommentThread({ projectKey, issueId, users }: CommentThreadProps
   }, [draft, submitting, projectKey, issueId]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    // Cmd/Ctrl+Enter submits
+    // Cmd/Ctrl+Enter always submits — even when the autocomplete is open.
+    // The MentionAutocomplete window handler also skips modifier-held Enter,
+    // so there's no race between submit and mention selection.
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
       void submit();
-    } else if (e.key === 'Escape') {
+      return;
+    }
+    // When the autocomplete is open, hand ArrowUp/Down/Enter/Esc to its
+    // window-level listener. preventDefault so the textarea doesn't also
+    // insert a newline or move the cursor.
+    if (mentionQuery !== null) {
+      if (['ArrowUp', 'ArrowDown', 'Enter', 'Escape'].includes(e.key)) {
+        e.preventDefault();
+        return;
+      }
+    }
+    if (e.key === 'Escape') {
       setDraft('');
     }
   }
+
+  function handleDraftChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const val = e.target.value;
+    setDraft(val);
+    const cursor = e.target.selectionStart ?? val.length;
+    const raw = getMentionContext(val, cursor);
+    // Strip trailing punctuation so the autocomplete query matches the
+    // server's normalized handles (`@alice.` → query `alice`).
+    const normalized =
+      raw === null ? null : raw.replace(/[._-]+$/, '');
+    setMentionQuery(normalized);
+  }
+
+  // Replace the partial `@query` slice at the cursor with `@handle ` (trailing
+  // space so the user can keep typing). Reads from `el.value` (the DOM) rather
+  // than the React `draft` closure so paste races between render and click
+  // can't splice the wrong slice.
+  const insertMention = useCallback((handle: string) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const value = el.value;
+    const cursor = el.selectionStart ?? value.length;
+    // Find the '@' position that opened the current mention context.
+    let atIdx = -1;
+    for (let i = cursor - 1; i >= 0; i--) {
+      if (value[i] === '@') {
+        atIdx = i;
+        break;
+      }
+      if (!/[a-z0-9._-]/i.test(value[i])) break;
+    }
+    if (atIdx === -1) return;
+    const before = value.slice(0, atIdx);
+    const after = value.slice(cursor);
+    const next = `${before}@${handle} ${after}`;
+    setDraft(next);
+    setMentionQuery(null);
+    // Re-focus the textarea and place cursor after the inserted mention.
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = (before + '@' + handle + ' ').length;
+      el.setSelectionRange(pos, pos);
+    });
+  }, []);
 
   function authorLabel(id: string): string {
     return users.find((u) => u.id === id)?.email ?? '[deleted user]';
@@ -169,14 +253,22 @@ export function CommentThread({ projectKey, issueId, users }: CommentThreadProps
         <textarea
           ref={textareaRef}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={handleDraftChange}
           onKeyDown={handleKeyDown}
           disabled={submitting}
           rows={3}
           aria-label="Comment body"
-          placeholder="Leave a comment… (supports Markdown)"
+          placeholder="Leave a comment… (supports Markdown, @mention users)"
           className="w-full text-sm px-2 py-1.5 rounded border border-[var(--color-surface-3)] bg-[var(--color-surface-0)] text-[var(--color-text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent-blue)] resize-none max-h-40 overflow-y-auto"
         />
+        {mentionQuery !== null && (
+          <MentionAutocomplete
+            users={users}
+            query={mentionQuery}
+            onSelect={insertMention}
+            onCancel={() => setMentionQuery(null)}
+          />
+        )}
         <div className="flex items-center justify-between gap-2">
           <span
             className={`text-[10px] ${

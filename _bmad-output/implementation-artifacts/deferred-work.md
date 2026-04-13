@@ -1,5 +1,9 @@
 # Deferred Work
 
+## Deferred from: code review of 6-2-mention-users-in-comments (2026-04-13)
+
+- `@alice@bob` adjacent-mentions regex limitation — the boundary regex `(?:^|[^a-z0-9._-])@([a-z0-9._-]+)` requires a non-handle char before `@`, so the second `@bob` in `@alice@bob` (no separator) is silently dropped. Ambiguous intent at parse time (is that two mentions or a fragment of an email?). Revisit in Story 6.3 if users complain; a possible fix is a second pass that splits on `@` within a handle run (apps/api/src/modules/comments/comments.service.ts + apps/web/src/lib/remark-mentions.ts)
+
 ## Deferred from: code review of 6-1-issue-comments-with-markdown (2026-04-13)
 
 - `CommentsService.assertAccessAndLoadIssue` uses owner-only gate (`project.ownerId !== userId` → 403). Non-owner collaborators can't read OR write comments. Same inherited MVP limitation from Stories 4.2/5.2 — today projects only have owners, so the gate collapses to "can you see this project". Epic 8 RBAC should relax this to membership check (apps/api/src/modules/comments/comments.service.ts)
