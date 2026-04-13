@@ -13,6 +13,8 @@ const STATUS_TO_ERROR: Record<number, string> = {
   403: 'Forbidden',
   404: 'NotFound',
   409: 'Conflict',
+  413: 'PayloadTooLarge',
+  415: 'UnsupportedMediaType',
   422: 'UnprocessableEntity',
   429: 'TooManyRequests',
   500: 'InternalServerError',

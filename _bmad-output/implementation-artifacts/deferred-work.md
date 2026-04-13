@@ -1,5 +1,30 @@
 # Deferred Work
 
+## Deferred from: code review of 8-1-project-level-role-assignment (2026-04-14)
+
+- `updateRole` / `addMember` service signatures accept the full `ProjectRole` union at the boundary (including `system_admin`). Controller Zod via `assignableProjectRoleSchema` blocks it in practice, but a seed script or future System Admin console bypasses the check. Narrow the service params to `AssignableProjectRole` when the System Admin console lands (apps/api/src/modules/project-members/project-members.service.ts)
+- Audit log `entityId` for `project_member` rows is `userId`, not a (project, user) composite. Not a bug — rows include `project_id` — but the Epic 8 audit-trail UI (Story 8.3) must filter by `project_id` rather than rely on `(entity_type, entity_id)` alone (apps/api/src/modules/project-members/project-members.service.ts)
+- Frontend `handleAdd` re-fetches the full members list after POST instead of optimistic append; `handleRemove` is non-optimistic. Polish, not a bug (apps/web/src/components/team-section.tsx)
+- Owner cannot be demoted or removed until Story 8.2 unifies the gates (intentional split-brain prevention, documented in story Dev Notes)
+- Invite-by-email not implemented — target user must already exist in `users`. Deferred until SMTP + magic-link flow lands (apps/api/src/modules/project-members/project-members.service.ts)
+- `system_admin` is not assignable from the project-settings dropdown (cross-project privilege escalation risk). A future System Admin console story will ship the cross-project assignment flow (FR37, FR38)
+
+## Deferred from: code review of 7-2-soft-delete-and-data-lifecycle (2026-04-13)
+
+- `redact()` in AuditLogService is not recursive — nested sensitive fields (`{user: {password: 'x'}}`) leak to audit_log. Low impact today because no service passes nested credentials, but `filterConfig` is free-form JSONB. Revisit when the first deeply-nested audit call site lands (apps/api/src/modules/audit/audit.service.ts)
+- `IssuesService.restore` owner gate missing — same inherited MVP pattern as the existing `softDelete`/`update` methods. Epic 8 RBAC will tighten all of them at once (apps/api/src/modules/issues/issues.service.ts)
+- `restore` accepts no `issueVersion` for optimistic locking — unlike `softDelete`. Two concurrent restore clicks from two tabs both succeed with different versions. Low impact because restore is idempotent-ish (apps/api/src/modules/issues/issues.service.ts)
+- Audit-trail cursor pagination tuple-compare not live-tested yet — controller test mocks the Drizzle chain, but the raw `sql\`(col, id) < (val, id)\`` needs a `curl` smoke against the live DB before the Epic 8 UI consumes it (apps/api/src/modules/audit/audit.controller.ts)
+- Undo-toast click path has no unit test coverage — manual smoke only. Worth adding an RTL test when the web app grows a test runner (apps/web/src/components/issue-detail-panel.tsx)
+- `DataLifecycleService` distributed lock (Redis `SET NX EX`) deferred — in-process mutex is sufficient for single-instance MVP; multi-instance story must add Redis guard before running in prod (apps/api/src/modules/lifecycle/data-lifecycle.service.ts)
+- `FilterPresetsService` update method doesn't exist — story task-list aspirationally said "CRUD" but only create/list/delete ship. If preset-edit lands, wire audit at that time (apps/api/src/modules/filter-presets/filter-presets.service.ts)
+
+## Deferred from: code review of 7-1-file-upload-and-download (2026-04-13)
+
+- Attachment owner-only gate — non-owner project members can't upload / list / download / delete. Same inherited MVP limitation from 4.2/5.2/6.1. Epic 8 RBAC membership check will relax (apps/api/src/modules/attachments/attachments.service.ts)
+- Cross-origin download credential leak — `<a href="…/download" target="_blank">` in AttachmentList works only same-origin. For prod (frontend on `app.example.com`, API on `api.example.com`) the httpOnly cookie is not sent, yielding 401. Fix requires a programmatic fetch + blob URL pattern; flag for the deployment story (apps/web/src/components/attachment-list.tsx)
+- No rate limiting on upload endpoint — 10 concurrent 50 MB uploads = 500 MB RSS via Multer memory storage. Infrastructure concern (load balancer / NestJS throttler module) for a production deployment story (apps/api/src/modules/attachments/attachments.controller.ts)
+
 ## Deferred from: code review of 6-2-mention-users-in-comments (2026-04-13)
 
 - `@alice@bob` adjacent-mentions regex limitation — the boundary regex `(?:^|[^a-z0-9._-])@([a-z0-9._-]+)` requires a non-handle char before `@`, so the second `@bob` in `@alice@bob` (no separator) is silently dropped. Ambiguous intent at parse time (is that two mentions or a fragment of an email?). Revisit in Story 6.3 if users complain; a possible fix is a second pass that splits on `@` within a handle run (apps/api/src/modules/comments/comments.service.ts + apps/web/src/lib/remark-mentions.ts)

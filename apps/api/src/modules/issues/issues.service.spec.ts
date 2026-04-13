@@ -6,6 +6,7 @@ const mockEventService = {
   emitIssueMoved: jest.fn(),
   emitIssueUpdated: jest.fn(),
   emitIssueDeleted: jest.fn(),
+  emitIssueRestored: jest.fn(),
 };
 
 const mockNotificationsService = {
@@ -1570,6 +1571,86 @@ describe('IssuesService', () => {
         expect.stringContaining('issueKey=MEGA-1'),
       );
       logSpy.mockRestore();
+    });
+  });
+
+  describe('restore', () => {
+    const restoredRow = { id: 'issue-id', issueKey: 'MEGA-1', issueVersion: 3 };
+
+    function setupRestoreMocks(
+      project: unknown | null,
+      current: { deletedAt: Date | null } | null,
+      updateResult: unknown[] = [restoredRow],
+    ) {
+      let call = 0;
+      mockDb.select.mockImplementation(() => {
+        call++;
+        if (call === 1) {
+          return {
+            from: jest.fn().mockReturnValue({
+              where: jest.fn().mockReturnValue({
+                limit: jest.fn().mockResolvedValue(project ? [project] : []),
+              }),
+            }),
+          };
+        }
+        return {
+          from: jest.fn().mockReturnValue({
+            where: jest.fn().mockReturnValue({
+              limit: jest.fn().mockResolvedValue(
+                current ? [{ id: 'issue-id', issueKey: 'MEGA-1', ...current }] : [],
+              ),
+            }),
+          }),
+        };
+      });
+      mockDb.update.mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            returning: jest.fn().mockResolvedValue(updateResult),
+          }),
+        }),
+      });
+    }
+
+    it('404 on unknown project', async () => {
+      setupRestoreMocks(null, null);
+      await expect(service.restore('NOPE', 'issue-id', userId)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('404 on unknown issue', async () => {
+      setupRestoreMocks(mockProject, null);
+      await expect(service.restore('MEGA', 'issue-id', userId)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('409 NotDeleted when deletedAt is null', async () => {
+      setupRestoreMocks(mockProject, { deletedAt: null });
+      await expect(service.restore('MEGA', 'issue-id', userId)).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it('409 RestoreWindowExpired when older than retention window', async () => {
+      const oldDate = new Date(Date.now() - 31 * 86400 * 1000);
+      setupRestoreMocks(mockProject, { deletedAt: oldDate });
+      await expect(service.restore('MEGA', 'issue-id', userId)).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'RestoreWindowExpired' }),
+      });
+    });
+
+    it('restores in-window issue and emits issue.restored', async () => {
+      const recent = new Date(Date.now() - 1 * 86400 * 1000);
+      setupRestoreMocks(mockProject, { deletedAt: recent });
+      const result = await service.restore('MEGA', 'issue-id', userId);
+      expect(result.issueKey).toBe('MEGA-1');
+      expect(mockEventService.emitIssueRestored).toHaveBeenCalledWith(
+        'MEGA',
+        expect.objectContaining({ issueId: 'issue-id', actorId: userId }),
+      );
     });
   });
 

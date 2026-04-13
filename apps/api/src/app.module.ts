@@ -11,6 +11,11 @@ import { UsersModule } from './modules/users/users.module';
 import { FilterPresetsModule } from './modules/filter-presets/filter-presets.module';
 import { CommentsModule } from './modules/comments/comments.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { AttachmentsModule } from './modules/attachments/attachments.module';
+import { AuditModule } from './modules/audit/audit.module';
+import { LifecycleModule } from './modules/lifecycle/lifecycle.module';
+import { ProjectMembersModule } from './modules/project-members/project-members.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -39,7 +44,9 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
         },
       },
     }),
+    ScheduleModule.forRoot(),
     DatabaseModule,
+    AuditModule,
     HealthModule,
     AuthModule,
     ProjectsModule,
@@ -50,6 +57,9 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     FilterPresetsModule,
     CommentsModule,
     NotificationsModule,
+    AttachmentsModule,
+    LifecycleModule,
+    ProjectMembersModule,
   ],
 })
 export class AppModule {}

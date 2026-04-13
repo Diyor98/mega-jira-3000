@@ -112,4 +112,15 @@ export class IssuesController {
     const userId = (req as any).user.userId;
     return this.issuesService.softDelete(projectKey, issueId, body.issueVersion, userId);
   }
+
+  @Post(':issueId/restore')
+  @HttpCode(HttpStatus.OK)
+  async restore(
+    @Param('projectKey') projectKey: string,
+    @Param('issueId') issueId: string,
+    @Req() req: Request,
+  ) {
+    const userId = (req as any).user.userId;
+    return this.issuesService.restore(projectKey, issueId, userId);
+  }
 }

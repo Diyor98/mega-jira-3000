@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { apiClient } from '../../../../lib/api-client';
+import { TeamSection } from '../../../../components/team-section';
 
 interface Status {
   id: string;
@@ -45,6 +46,7 @@ export default function ProjectSettingsPage() {
   const [statuses, setStatuses] = useState<Status[]>([]);
   const [rules, setRules] = useState<Rule[]>([]);
   const [isOwner, setIsOwner] = useState(false);
+  const [ownerUserId, setOwnerUserId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +83,7 @@ export default function ProjectSettingsPage() {
       ]);
       const found = (projects ?? []).find((p) => p.key === projectKey) ?? null;
       setIsOwner(!!found);
+      if (found) setOwnerUserId(found.ownerId);
       setStatuses(sts ?? []);
       // Rules endpoint is owner-gated; only attempt when we know we own it.
       if (found) {
@@ -547,6 +550,12 @@ export default function ProjectSettingsPage() {
           </button>
         </form>
       )}
+
+      <TeamSection
+        projectKey={projectKey}
+        canManage={isOwner}
+        ownerUserId={ownerUserId}
+      />
     </div>
   );
 }

@@ -6,7 +6,9 @@ import {
   ConflictException,
   ForbiddenException,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { AuditLogService } from '../audit/audit.service';
 import { eq, and, asc } from 'drizzle-orm';
 import { DATABASE_TOKEN } from '../../database/database.module';
 import type { Database } from '../../database/db';
@@ -21,7 +23,10 @@ import {
 export class FilterPresetsService {
   private readonly logger = new Logger(FilterPresetsService.name);
 
-  constructor(@Inject(DATABASE_TOKEN) private readonly db: Database) {}
+  constructor(
+    @Inject(DATABASE_TOKEN) private readonly db: Database,
+    @Optional() private readonly auditLog?: AuditLogService,
+  ) {}
 
   /**
    * Today: project access === project ownership. When Epic 8 RBAC lands this
@@ -82,6 +87,15 @@ export class FilterPresetsService {
     this.logger.log(
       `[AUDIT] filterPreset.created | userId=${userId} | projectKey=${project.key} | presetId=${created.id} | name=${created.name}`,
     );
+
+    await this.auditLog?.record({
+      projectId: project.id,
+      actorId: userId,
+      entityType: 'filter_preset',
+      entityId: created.id,
+      action: 'created',
+      after: { name: created.name },
+    });
 
     return created;
   }
@@ -151,6 +165,15 @@ export class FilterPresetsService {
     this.logger.log(
       `[AUDIT] filterPreset.deleted | userId=${userId} | projectKey=${project.key} | presetId=${presetId} | name=${target.name}`,
     );
+
+    await this.auditLog?.record({
+      projectId: project.id,
+      actorId: userId,
+      entityType: 'filter_preset',
+      entityId: presetId,
+      action: 'deleted',
+      before: { name: target.name },
+    });
 
     return { id: presetId, deleted: true };
   }

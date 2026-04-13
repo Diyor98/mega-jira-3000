@@ -8,6 +8,14 @@ export const envSchema = z.object({
   JWT_REFRESH_EXPIRY: z.string().default('7d'),
   API_PORT: z.coerce.number().default(3001),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  // Story 7.1 attachments
+  ATTACHMENT_STORAGE_DIR: z.string().default('./var/attachments'),
+  ATTACHMENT_MAX_BYTES: z.coerce.number().default(52_428_800),
+  // Story 7.2 data lifecycle
+  DATA_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
+  // Comma-separated list of user UUIDs allowed to call
+  // POST /admin/lifecycle/purge-now. Empty/missing disables the endpoint.
+  ADMIN_USER_IDS: z.string().optional(),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

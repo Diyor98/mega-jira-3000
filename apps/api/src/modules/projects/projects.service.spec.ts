@@ -37,9 +37,15 @@ describe('ProjectsService', () => {
           }),
         };
       }
-      // Workflow statuses insert
+      if (insertCallCount === 3) {
+        // Workflow statuses insert
+        return {
+          values: jest.fn().mockResolvedValue(results.statusesResult ?? undefined),
+        };
+      }
+      // Story 8.1: project_members insert (owner auto-enroll)
       return {
-        values: jest.fn().mockResolvedValue(results.statusesResult ?? undefined),
+        values: jest.fn().mockResolvedValue(undefined),
       };
     });
 
@@ -92,8 +98,8 @@ describe('ProjectsService', () => {
 
       expect(result).toEqual(mockProject);
       expect(mockDb.transaction).toHaveBeenCalled();
-      // 3 insert calls: project, workflow, statuses
-      expect(mockTx.insert).toHaveBeenCalledTimes(3);
+      // 4 insert calls: project, workflow, statuses, owner-member (Story 8.1)
+      expect(mockTx.insert).toHaveBeenCalledTimes(4);
       // AC 6: audit log emitted
       expect(logSpy).toHaveBeenCalledWith(
         expect.stringContaining('[AUDIT] project.created'),

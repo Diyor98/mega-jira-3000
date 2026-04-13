@@ -12,23 +12,31 @@ import {
 
 type ToastType = 'success' | 'error';
 
+interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 interface ToastRecord {
   id: string;
   message: string;
   type: ToastType;
+  action?: ToastAction;
+  ttlMs?: number;
+}
+
+interface ToastOptions {
+  action?: ToastAction;
+  ttlMs?: number;
 }
 
 interface ToastContextValue {
-  success: (message: string) => void;
-  error: (message: string) => void;
+  success: (message: string, options?: ToastOptions) => void;
+  error: (message: string, options?: ToastOptions) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
-/**
- * Hook returning `{ success, error }` dispatchers. Must be used inside a
- * `<ToastProvider>` — throws a helpful error if not.
- */
 export function useToast(): ToastContextValue {
   const ctx = useContext(ToastContext);
   if (!ctx) {
@@ -53,20 +61,20 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const push = useCallback(
-    (type: ToastType, message: string) => {
+    (type: ToastType, message: string, options?: ToastOptions) => {
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      setToasts((prev) => [...prev, { id, message, type }]);
-      if (type === 'success') {
-        // Auto-dismiss success toasts after 3s per UX-DR12.
-        const timer = setTimeout(() => dismiss(id), SUCCESS_AUTO_DISMISS_MS);
+      setToasts((prev) => [...prev, { id, message, type, action: options?.action, ttlMs: options?.ttlMs }]);
+      // Auto-dismiss: default 3s for success, custom ttlMs if provided
+      // (Undo-style toasts pass 10_000). Error toasts without a ttl persist.
+      const ttl = options?.ttlMs ?? (type === 'success' ? SUCCESS_AUTO_DISMISS_MS : undefined);
+      if (ttl) {
+        const timer = setTimeout(() => dismiss(id), ttl);
         timersRef.current.set(id, timer);
       }
-      // Error toasts persist until the user clicks ×.
     },
     [dismiss],
   );
 
-  // Clean up any pending timers on unmount.
   useEffect(() => {
     const timers = timersRef.current;
     return () => {
@@ -75,11 +83,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const success = useCallback((m: string) => push('success', m), [push]);
-  const error = useCallback((m: string) => push('error', m), [push]);
-  // Memoize the context value so consumers don't re-render on every
-  // toast-state change (the value object identity is what useContext
-  // subscribes on).
+  const success = useCallback(
+    (m: string, options?: ToastOptions) => push('success', m, options),
+    [push],
+  );
+  const error = useCallback(
+    (m: string, options?: ToastOptions) => push('error', m, options),
+    [push],
+  );
   const value = useMemo(() => ({ success, error }), [success, error]);
 
   return (
@@ -116,6 +127,18 @@ function ToastContainer({
           }`}
         >
           <span>{t.message}</span>
+          {t.action && (
+            <button
+              type="button"
+              onClick={() => {
+                t.action!.onClick();
+                onDismiss(t.id);
+              }}
+              className="ml-1 px-2 py-0.5 rounded bg-white/20 hover:bg-white/30 text-white font-medium"
+            >
+              {t.action.label}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onDismiss(t.id)}

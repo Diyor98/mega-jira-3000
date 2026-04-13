@@ -28,6 +28,12 @@ export interface IssueDeletePayload {
   timestamp: string;
 }
 
+export interface IssueRestorePayload {
+  issueId: string;
+  actorId: string;
+  timestamp: string;
+}
+
 export interface CommentCreatePayload {
   issueId: string;
   comment: Record<string, unknown>;
@@ -71,6 +77,11 @@ export class EventService {
   emitIssueDeleted(projectKey: string, payload: IssueDeletePayload): void {
     this.emit('issue.deleted', projectKey, payload);
     this.logger.log(`Emitted issue.deleted to project:${projectKey} | issue=${payload.issueId}`);
+  }
+
+  emitIssueRestored(projectKey: string, payload: IssueRestorePayload): void {
+    this.emit('issue.restored', projectKey, payload);
+    this.logger.log(`Emitted issue.restored to project:${projectKey} | issue=${payload.issueId}`);
   }
 
   emitCommentCreated(projectKey: string, payload: CommentCreatePayload): void {

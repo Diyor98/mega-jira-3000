@@ -32,7 +32,7 @@
 # - Dependency chain: Epic 1 → Epic 2 → Epic 3 → Epic 4. Epics 5-9 parallel after Epic 3.
 
 generated: 2026-04-09
-last_updated: 2026-04-13 # story 6.4 done — epic 6 complete
+last_updated: 2026-04-14 # story 8.1 done
 project: Mega Jira 3000
 project_key: MEGA
 tracking_system: file-system
@@ -88,14 +88,14 @@ development_status:
   epic-6-retrospective: optional
 
   # === EPIC 7: File Attachments & Data Integrity ===
-  epic-7: backlog
-  7-1-file-upload-and-download: backlog
-  7-2-soft-delete-and-data-lifecycle: backlog
+  epic-7: in-progress
+  7-1-file-upload-and-download: done
+  7-2-soft-delete-and-data-lifecycle: done
   epic-7-retrospective: optional
 
   # === EPIC 8: RBAC & Project Administration ===
-  epic-8: backlog
-  8-1-project-level-role-assignment: backlog
+  epic-8: in-progress
+  8-1-project-level-role-assignment: done
   8-2-permission-enforcement: backlog
   8-3-project-settings-and-audit-trail: backlog
   8-4-responsive-layout-breakpoints: backlog

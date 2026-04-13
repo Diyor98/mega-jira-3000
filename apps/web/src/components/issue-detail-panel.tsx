@@ -5,6 +5,8 @@ import { ISSUE_PRIORITIES, ISSUE_TYPES } from '@mega-jira/shared';
 import { apiClient } from '../lib/api-client';
 import { ConflictNotification } from './conflict-notification';
 import { CommentThread } from './comment-thread';
+import { AttachmentList } from './attachment-list';
+import { useToast } from './toast';
 
 interface IssueDetail {
   id: string;
@@ -69,6 +71,7 @@ interface IssueDetailPanelProps {
 }
 
 export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted, users = [] }: IssueDetailPanelProps) {
+  const toast = useToast();
   const [issue, setIssue] = useState<IssueDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -543,9 +546,30 @@ export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted, user
             <button
               onClick={async () => {
                 setDeleting(true);
+                const deletedKey = issue.issueKey;
                 try {
                   await apiClient.delete(`/projects/${projectKey}/issues/${issueId}`, {
                     body: JSON.stringify({ issueVersion: issue.issueVersion }),
+                  });
+                  // Story 7.2: Undo-toast — persist 10s, restore on click.
+                  toast.success(`Deleted "${deletedKey}"`, {
+                    ttlMs: 10_000,
+                    action: {
+                      label: 'Undo',
+                      onClick: async () => {
+                        try {
+                          await apiClient.post(
+                            `/projects/${projectKey}/issues/${issueId}/restore`,
+                            {},
+                          );
+                          toast.success(`Restored "${deletedKey}"`);
+                        } catch (e) {
+                          toast.error(
+                            (e as { message?: string })?.message ?? 'Restore failed',
+                          );
+                        }
+                      },
+                    },
                   });
                   onDeleted?.();
                 } catch (err: unknown) {
@@ -576,6 +600,9 @@ export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted, user
           </button>
         )}
       </div>
+
+      {/* Attachments (Story 7.1) */}
+      <AttachmentList projectKey={projectKey} issueId={issue.id} />
 
       {/* Comments thread (Story 6.1) */}
       <CommentThread projectKey={projectKey} issueId={issue.id} users={users} />

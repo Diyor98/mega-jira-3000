@@ -387,6 +387,13 @@ export default function ProjectPage() {
       if (recentSelfMutationsRef.current.has(issueId)) return;
       setIssues((prev) => prev.filter((i) => i.id !== issueId));
     },
+    'issue.restored': (data: unknown) => {
+      const { issueId } = data as { issueId: string };
+      if (recentSelfMutationsRef.current.has(issueId)) return;
+      // Re-fetch the board so the restored issue reappears in its column
+      // (list-based refetch is simpler than hydrating a single issue row).
+      loadData();
+    },
   }), [pulseIssue, filterActive, loadData]);
 
   const { isReconnecting } = useWebSocket({

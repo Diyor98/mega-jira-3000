@@ -59,4 +59,39 @@ export const apiClient = {
 
   delete: <T>(endpoint: string, options?: RequestOptions) =>
     request<T>(endpoint, { ...options, method: 'DELETE' }),
+
+  /**
+   * Upload a single file via multipart/form-data. The browser sets the
+   * Content-Type (including the multipart boundary) automatically — do NOT
+   * pass a Content-Type header manually.
+   */
+  uploadFile: async <T>(
+    endpoint: string,
+    fieldName: string,
+    file: File,
+  ): Promise<T> => {
+    const url = `${API_BASE_URL}${endpoint}`;
+    const formData = new FormData();
+    formData.append(fieldName, file);
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+    } catch {
+      throw { error: 'NetworkError', message: 'Unable to reach the server', code: 0 };
+    }
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({
+        error: 'NetworkError',
+        message: 'An unexpected error occurred',
+        code: response.status,
+      }));
+      throw error;
+    }
+    const json = await response.json().catch(() => ({ data: null }));
+    return json?.data !== undefined ? json.data : json;
+  },
 };

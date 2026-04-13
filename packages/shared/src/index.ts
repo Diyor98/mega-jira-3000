@@ -48,3 +48,16 @@ export type {
   UpdateNotificationPreferencesInput,
   NotificationPreferencesDto,
 } from './schemas/notification.schema';
+export {
+  PROJECT_ROLES,
+  ASSIGNABLE_PROJECT_ROLES,
+  projectRoleSchema,
+  assignableProjectRoleSchema,
+  projectMemberCreateSchema,
+  projectMemberUpdateSchema,
+} from './schemas/project-member.schema';
+export type {
+  ProjectRole,
+  ProjectMemberCreateInput,
+  ProjectMemberUpdateInput,
+} from './schemas/project-member.schema';

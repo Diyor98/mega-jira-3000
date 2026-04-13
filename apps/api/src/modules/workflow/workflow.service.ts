@@ -6,7 +6,9 @@ import {
   ConflictException,
   ForbiddenException,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { AuditLogService } from '../audit/audit.service';
 import { eq, and, isNull, inArray, sql } from 'drizzle-orm';
 import { DATABASE_TOKEN } from '../../database/database.module';
 import type { Database } from '../../database/db';
@@ -24,7 +26,10 @@ import { addRuleSchema, type AddRuleDto } from './dto/add-rule.dto';
 export class WorkflowService {
   private readonly logger = new Logger(WorkflowService.name);
 
-  constructor(@Inject(DATABASE_TOKEN) private readonly db: Database) {}
+  constructor(
+    @Inject(DATABASE_TOKEN) private readonly db: Database,
+    @Optional() private readonly auditLog?: AuditLogService,
+  ) {}
 
   // -------------- helpers --------------
 
@@ -114,6 +119,15 @@ export class WorkflowService {
     this.logger.log(
       `[AUDIT] workflowStatus.added | userId=${userId} | projectKey=${project.key} | statusId=${created.id} | name=${created.name}`,
     );
+
+    await this.auditLog?.record({
+      projectId: project.id,
+      actorId: userId,
+      entityType: 'workflow_status',
+      entityId: created.id,
+      action: 'created',
+      after: { name: created.name, position: created.position },
+    });
 
     return created;
   }
@@ -242,6 +256,15 @@ export class WorkflowService {
       `[AUDIT] workflowStatus.${action} | userId=${userId} | projectKey=${project.key} | statusId=${statusId} | name=${updatedRow.name} | position=${updatedRow.position}`,
     );
 
+    await this.auditLog?.record({
+      projectId: project.id,
+      actorId: userId,
+      entityType: 'workflow_status',
+      entityId: statusId,
+      action: action === 'renamed' ? 'renamed' : action === 'reordered' ? 'reordered' : 'updated',
+      after: { name: updatedRow.name, position: updatedRow.position },
+    });
+
     return updatedRow;
   }
 
@@ -310,6 +333,15 @@ export class WorkflowService {
     this.logger.log(
       `[AUDIT] workflowStatus.deleted | userId=${userId} | projectKey=${project.key} | statusId=${statusId} | name=${target.name}`,
     );
+
+    await this.auditLog?.record({
+      projectId: project.id,
+      actorId: userId,
+      entityType: 'workflow_status',
+      entityId: statusId,
+      action: 'deleted',
+      before: { name: target.name, position: target.position },
+    });
 
     return { id: statusId, deleted: true };
   }
@@ -457,6 +489,20 @@ export class WorkflowService {
       `[AUDIT] workflowRule.added | userId=${userId} | projectKey=${project.key} | ruleId=${created.id} | ruleType=${created.ruleType} | requiredField=${created.requiredField ?? 'null'} | fromStatusId=${created.fromStatusId ?? 'null'} | toStatusId=${created.toStatusId}`,
     );
 
+    await this.auditLog?.record({
+      projectId: project.id,
+      actorId: userId,
+      entityType: 'workflow_rule',
+      entityId: created.id,
+      action: 'created',
+      after: {
+        ruleType: created.ruleType,
+        requiredField: created.requiredField ?? null,
+        fromStatusId: created.fromStatusId ?? null,
+        toStatusId: created.toStatusId,
+      },
+    });
+
     return created;
   }
 
@@ -512,6 +558,14 @@ export class WorkflowService {
     this.logger.log(
       `[AUDIT] workflowRule.deleted | userId=${userId} | projectKey=${project.key} | ruleId=${ruleId}`,
     );
+
+    await this.auditLog?.record({
+      projectId: project.id,
+      actorId: userId,
+      entityType: 'workflow_rule',
+      entityId: ruleId,
+      action: 'deleted',
+    });
 
     return { id: ruleId, deleted: true };
   }

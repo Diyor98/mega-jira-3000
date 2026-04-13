@@ -5,6 +5,7 @@ import {
   BadRequestException,
   ForbiddenException,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { eq, and, or, asc, isNull, inArray, sql } from 'drizzle-orm';
 import { DATABASE_TOKEN } from '../../database/database.module';
@@ -17,6 +18,7 @@ import { users } from '../../database/schema/users';
 import { createCommentSchema, type CreateCommentInput } from '@mega-jira/shared';
 import { EventService } from '../board/event.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { AuditLogService } from '../audit/audit.service';
 
 /**
  * Parses `@handle` mentions out of a Markdown comment body. Returns unique,
@@ -46,6 +48,7 @@ export class CommentsService {
     @Inject(DATABASE_TOKEN) private readonly db: Database,
     private readonly eventService: EventService,
     private readonly notificationsService: NotificationsService,
+    @Optional() private readonly auditLog?: AuditLogService,
   ) {}
 
   /**
@@ -174,6 +177,19 @@ export class CommentsService {
     this.logger.log(
       `[AUDIT] comment.created | userId=${userId} | projectKey=${project.key} | issueKey=${issue.issueKey} | commentId=${result.id} | mentionCount=${result.mentions.length}`,
     );
+
+    await this.auditLog?.record({
+      projectId: project.id,
+      actorId: userId,
+      entityType: 'comment',
+      entityId: result.id,
+      action: 'created',
+      after: {
+        issueId: issue.id,
+        bodyLength: (result.body as string | undefined)?.length ?? 0,
+        mentionCount: result.mentions.length,
+      },
+    });
 
     this.eventService.emitCommentCreated(project.key, {
       issueId: issue.id,

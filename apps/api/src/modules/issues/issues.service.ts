@@ -5,6 +5,7 @@ import {
   ConflictException,
   Inject,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { eq, and, or, isNull, inArray, gte, lte, desc, sql, type SQL } from 'drizzle-orm';
 import { DATABASE_TOKEN } from '../../database/database.module';
@@ -23,6 +24,8 @@ import { createIssueLinkSchema, type CreateIssueLinkDto } from './dto/create-iss
 import { issueLinks } from '../../database/schema/issue-links';
 import { EventService } from '../board/event.service';
 import { NotificationsService, type NotificationInsertRow } from '../notifications/notifications.service';
+import { AuditLogService } from '../audit/audit.service';
+import { resolveRetentionDays } from '../lifecycle/data-lifecycle.service';
 
 const PG_UNIQUE_VIOLATION = '23505';
 
@@ -41,6 +44,7 @@ export class IssuesService {
     @Inject(DATABASE_TOKEN) private readonly db: Database,
     private readonly eventService: EventService,
     private readonly notificationsService: NotificationsService,
+    @Optional() private readonly auditLog?: AuditLogService,
   ) {}
 
   async create(dto: CreateIssueDto, userId: string, projectKey: string) {
@@ -172,6 +176,22 @@ export class IssuesService {
     });
 
     this.logger.log(`[AUDIT] issue.created | userId=${userId} | issueKey=${issue.issueKey}`);
+
+    await this.auditLog?.record({
+      projectId: project.id,
+      actorId: userId,
+      entityType: 'issue',
+      entityId: (issue as unknown as { id: string }).id,
+      action: 'created',
+      after: {
+        issueKey: issue.issueKey,
+        title: issue.title,
+        type: issue.type,
+        priority: issue.priority,
+        statusId: issue.statusId,
+        assigneeId: issue.assigneeId,
+      },
+    });
 
     // Story 6.3: if the new issue was created with an initial assignee who is
     // not the reporter, notify them.
@@ -718,6 +738,18 @@ export class IssuesService {
 
     this.logger.log(`[AUDIT] issue.updated | userId=${userId} | issueKey=${updated.issueKey} | fields=[${changedFields.join(',')}]`);
 
+    await this.auditLog?.record({
+      projectId: project.id,
+      actorId: userId,
+      entityType: 'issue',
+      entityId: updated.id,
+      action: 'updated',
+      after: changedFields.reduce<Record<string, unknown>>((acc, k) => {
+        acc[k] = (updated as Record<string, unknown>)[k];
+        return acc;
+      }, { issueKey: updated.issueKey, changedFields }),
+    });
+
     // Story 6.3 triggers: build a recipient set for assigned / status_changed
     // notifications. Best-effort — any failure is swallowed inside
     // `createBulk` so the update's primary result is unaffected.
@@ -1048,6 +1080,20 @@ export class IssuesService {
 
     this.logger.log(`[AUDIT] issue.deleted | userId=${userId} | issueKey=${deleted.issueKey}`);
 
+    await this.auditLog?.record({
+      projectId: project.id,
+      actorId: userId,
+      entityType: 'issue',
+      entityId: deleted.id,
+      action: 'deleted',
+      before: {
+        issueKey: deleted.issueKey,
+        title: deleted.title,
+        type: deleted.type,
+        priority: deleted.priority,
+      },
+    });
+
     this.eventService.emitIssueDeleted(projectKey, {
       issueId: deleted.id,
       actorId: userId,
@@ -1055,5 +1101,97 @@ export class IssuesService {
     });
 
     return deleted;
+  }
+
+  /**
+   * Story 7.2: restore a soft-deleted issue if it's still inside the 30-day
+   * retention window. Clears `deletedAt`, bumps `issueVersion`, emits
+   * `issue.restored` WS event.
+   */
+  async restore(projectKey: string, issueId: string, userId: string) {
+    // Shared parser — throws on invalid env, same behavior as the cron.
+    // Previously used raw `Number(process.env.…)` which coerced bad values
+    // to NaN and silently made the window check always-false.
+    const retentionDays = resolveRetentionDays();
+
+    const [project] = await this.db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.key, projectKey))
+      .limit(1);
+
+    if (!project) {
+      throw new NotFoundException(`Project '${projectKey}' not found`);
+    }
+
+    const [current] = await this.db
+      .select({
+        id: issues.id,
+        issueKey: issues.issueKey,
+        deletedAt: issues.deletedAt,
+      })
+      .from(issues)
+      .where(and(eq(issues.id, issueId), eq(issues.projectId, project.id)))
+      .limit(1);
+
+    if (!current) {
+      throw new NotFoundException('Issue not found');
+    }
+    if (current.deletedAt === null) {
+      throw new ConflictException({ code: 'NotDeleted', message: 'Issue is not deleted' });
+    }
+    const ageMs = Date.now() - current.deletedAt.getTime();
+    if (ageMs > retentionDays * 86_400_000) {
+      throw new ConflictException({
+        code: 'RestoreWindowExpired',
+        message: 'This issue can no longer be restored.',
+      });
+    }
+
+    const [restored] = await this.db
+      .update(issues)
+      .set({
+        deletedAt: null,
+        issueVersion: sql`${issues.issueVersion} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(issues.id, issueId),
+          eq(issues.projectId, project.id),
+          // Scope the UPDATE to still-soft-deleted rows only — a concurrent
+          // hard-delete / cron purge would leave `restored` undefined and
+          // the logger line below would crash (review finding M1).
+          sql`${issues.deletedAt} is not null`,
+        ),
+      )
+      .returning({
+        id: issues.id,
+        issueKey: issues.issueKey,
+        issueVersion: issues.issueVersion,
+      });
+
+    if (!restored) {
+      throw new NotFoundException('Issue no longer exists');
+    }
+
+    this.logger.log(`[AUDIT] issue.restored | userId=${userId} | issueKey=${restored.issueKey}`);
+
+    await this.auditLog?.record({
+      projectId: project.id,
+      actorId: userId,
+      entityType: 'issue',
+      entityId: restored.id,
+      action: 'restored',
+      after: { issueKey: restored.issueKey, issueVersion: restored.issueVersion },
+    });
+
+    this.eventService.emitIssueRestored(projectKey, {
+      issueId: restored.id,
+      actorId: userId,
+      timestamp: new Date().toISOString(),
+    });
+
+    return restored;
   }
 }

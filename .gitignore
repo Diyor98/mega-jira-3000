@@ -32,3 +32,6 @@ npm-debug.log*
 
 # Drizzle
 drizzle.config.ts.timestamp-*
+
+# Local attachment storage (Story 7.1)
+apps/api/var/
