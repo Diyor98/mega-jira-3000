@@ -27,6 +27,9 @@ import { FilterBar, EMPTY_FILTER, hasAnyFilter, type FilterValue, type FilterPre
 import { NotificationBell } from '../../../components/notification-bell';
 import { ToastProvider } from '../../../components/toast';
 import { PENDING_OPEN_ISSUE_KEY } from '../../../lib/palette-actions';
+import { TYPE_COLORS, PRIORITY_COLORS } from '../../../lib/issue-visuals';
+import { ViewToggle, type ViewMode } from '../../../components/view-toggle';
+import { IssueListView } from '../../../components/issue-list-view';
 
 function parseFilterFromSearch(sp: URLSearchParams): FilterValue {
   const splitCsv = (v: string | null) => (v ? v.split(',').filter(Boolean) : []);
@@ -81,19 +84,9 @@ interface Status {
   position: number;
 }
 
-const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
-  epic: { bg: '#EDE9FE', text: '#6D28D9' },
-  story: { bg: '#DBEAFE', text: '#1D4ED8' },
-  task: { bg: '#D1FAE5', text: '#047857' },
-  bug: { bg: '#FEE2E2', text: '#B91C1C' },
-};
-
-const PRIORITY_COLORS: Record<string, string> = {
-  P1: '#DC2626',
-  P2: '#D97706',
-  P3: '#2563EB',
-  P4: '#9CA3AF',
-};
+// Moved to `apps/web/src/lib/issue-visuals.ts` in Story 9.3 so the Board
+// (card) and the List (row) can share one source of truth.
+// (Imports live at the top of the file.)
 
 // Draggable issue card
 function DraggableIssueCard({ issue, onClick, epicProgress, isPulsing, isFocused }: {
@@ -227,11 +220,26 @@ export default function ProjectPage() {
   const updateFilter = useCallback(
     (next: FilterValue) => {
       const qs = filterToQueryString(next);
-      // Emit a clean pathname when no filters are active — avoids leaving a
-      // bare `?` in the browser address bar.
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      const rawView = searchParams.get('view');
+      const viewQs = rawView === 'list' ? 'view=list' : '';
+      // Preserve an active `?view=list` across filter changes so the user
+      // doesn't pop back to Board every time they tweak a facet.
+      const joined = [qs, viewQs].filter(Boolean).join('&');
+      router.replace(joined ? `${pathname}?${joined}` : pathname, { scroll: false });
     },
-    [router, pathname],
+    [router, pathname, searchParams],
+  );
+
+  // Story 9.3: Board/List view mode, driven by `?view=` query param.
+  const view: ViewMode = searchParams.get('view') === 'list' ? 'list' : 'board';
+  const updateView = useCallback(
+    (next: ViewMode) => {
+      const qs = filterToQueryString(filter);
+      const viewQs = next === 'list' ? 'view=list' : '';
+      const joined = [qs, viewQs].filter(Boolean).join('&');
+      router.replace(joined ? `${pathname}?${joined}` : pathname, { scroll: false });
+    },
+    [router, pathname, filter],
   );
   const [issues, setIssues] = useState<Issue[]>([]);
   const [statuses, setStatuses] = useState<Status[]>([]);
@@ -1071,15 +1079,20 @@ export default function ProjectPage() {
         />
       )}
 
-      <FilterBar
-        statuses={statuses}
-        users={users}
-        value={filter}
-        onChange={updateFilter}
-        presets={presets}
-        onSavePreset={handleSavePreset}
-        onDeletePreset={handleDeletePreset}
-      />
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
+        {!loading && <ViewToggle value={view} onChange={updateView} />}
+        <div className="flex-1 min-w-0">
+          <FilterBar
+            statuses={statuses}
+            users={users}
+            value={filter}
+            onChange={updateFilter}
+            presets={presets}
+            onSavePreset={handleSavePreset}
+            onDeletePreset={handleDeletePreset}
+          />
+        </div>
+      </div>
 
       {filterActive && !loading && issues.length === 0 && (
         <div className="mb-3 px-4 py-6 rounded border border-dashed border-[var(--color-surface-3)] bg-[var(--color-surface-1)] text-center">
@@ -1104,6 +1117,19 @@ export default function ProjectPage() {
         />
       )}
 
+      {view === 'list' ? (
+        <IssueListView
+          issues={issues}
+          statuses={statuses}
+          users={users}
+          pulsingIssueIds={pulsingIssueIds}
+          filterActive={filterActive}
+          onOpenIssue={(id) => {
+            setFocusedIssueId(id);
+            setSelectedIssueId(id);
+          }}
+        />
+      ) : (
       <DndContext
         sensors={sensors}
         onDragStart={handleDragStart}
@@ -1166,6 +1192,7 @@ export default function ProjectPage() {
           )}
         </DragOverlay>
       </DndContext>
+      )}
 
       <SlideOverPanel
         isOpen={selectedIssueId !== null}

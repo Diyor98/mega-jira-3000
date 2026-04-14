@@ -1,6 +1,6 @@
 # Story 9.1: Command Palette (Cmd+K)
 
-Status: review
+Status: done
 
 ## Story
 

@@ -1,6 +1,6 @@
 # Story 9.2: Keyboard Shortcuts
 
-Status: review
+Status: done
 
 ## Story
 
