@@ -145,6 +145,37 @@ export function FilterBar({
     };
   }, []);
 
+  // Story 9.2: `/` keyboard shortcut dispatches this event. Open the Status
+  // popover (leftmost, most-common facet — closest semantic match for
+  // "focus filter" since the bar has no free-text search input today). If a
+  // popover is already open, slam it shut and reopen on Status so keyboard
+  // users always land in a known state.
+  useEffect(() => {
+    function onFocusFilter() {
+      setOpen(null);
+      // Defer so the reopen flushes after the close — otherwise React batches
+      // both state writes into a single no-op for the Status case.
+      queueMicrotask(() => setOpen('status'));
+    }
+    window.addEventListener('mega:shortcut:focus-filter', onFocusFilter);
+    return () => window.removeEventListener('mega:shortcut:focus-filter', onFocusFilter);
+  }, []);
+
+  // When the Status popover opens in response to `/`, move DOM focus to the
+  // first checkbox inside it so arrow/Tab navigation works immediately.
+  useEffect(() => {
+    if (open !== 'status') return;
+    if (!rootRef.current) return;
+    // Defer one frame so the popover content has mounted in the portal/DOM.
+    const id = requestAnimationFrame(() => {
+      const firstCheckbox = rootRef.current?.querySelector<HTMLInputElement>(
+        'input[type="checkbox"]',
+      );
+      firstCheckbox?.focus();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [open]);
+
   function toggleInArray(arr: string[], v: string): string[] {
     return arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
   }

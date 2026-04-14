@@ -96,11 +96,12 @@ const PRIORITY_COLORS: Record<string, string> = {
 };
 
 // Draggable issue card
-function DraggableIssueCard({ issue, onClick, epicProgress, isPulsing }: {
+function DraggableIssueCard({ issue, onClick, epicProgress, isPulsing, isFocused }: {
   issue: Issue;
   onClick: () => void;
   epicProgress?: number;
   isPulsing?: boolean;
+  isFocused?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: issue.id,
@@ -112,11 +113,14 @@ function DraggableIssueCard({ issue, onClick, epicProgress, isPulsing }: {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
+      data-issue-id={issue.id}
+      role="gridcell"
+      aria-selected={isFocused ? true : undefined}
       onClick={(e) => {
         // Only open detail if not dragging
         if (!isDragging) onClick();
       }}
-      className={`p-2 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-3)] hover:border-[var(--color-accent-blue)] transition-colors cursor-grab active:cursor-grabbing ${isDragging ? 'opacity-30' : 'transition-transform duration-200 ease-out'} ${isPulsing ? 'animate-remote-pulse' : ''}`}
+      className={`p-2 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-3)] hover:border-[var(--color-accent-blue)] transition-colors cursor-grab active:cursor-grabbing ${isDragging ? 'opacity-30' : 'transition-transform duration-200 ease-out'} ${isPulsing ? 'animate-remote-pulse' : ''} ${isFocused ? 'ring-2 ring-[var(--color-accent-blue)] ring-offset-1' : ''}`}
     >
       <IssueCardContent issue={issue} epicProgress={epicProgress} />
     </div>
@@ -182,6 +186,8 @@ function DroppableColumn({ status, children, isOver, issueCount }: {
   return (
     <div
       ref={setNodeRef}
+      role="row"
+      aria-label={`${status.name} column`}
       className={`flex-shrink-0 w-[240px] lg:w-[280px] rounded flex flex-col transition-colors duration-150 ${
         isOver
           ? 'bg-[var(--color-accent-blue)]/5 border-2 border-[var(--color-accent-blue)]'
@@ -261,6 +267,40 @@ export default function ProjectPage() {
   const [workflowPromptValue, setWorkflowPromptValue] = useState<string>('');
   const [workflowPromptSubmitting, setWorkflowPromptSubmitting] = useState(false);
   const [workflowPromptError, setWorkflowPromptError] = useState<string | null>(null);
+
+  // Story 9.2: keyboard focus cursor. Independent from `selectedIssueId`
+  // (which tracks the open detail panel). Set by arrow-nav / I / R / D /
+  // Enter shortcuts and cleared on navigation, outside clicks, or overlay
+  // opens.
+  const [focusedIssueId, setFocusedIssueId] = useState<string | null>(null);
+  // Ephemeral banner for shortcut misses (e.g. "no In Progress status").
+  // We cannot call `useToast()` here because this component wraps the board
+  // in a local `<ToastProvider>` — the provider is a descendant of this
+  // function, not an ancestor. A tiny self-dismissing banner is lighter than
+  // restructuring the tree.
+  const [shortcutMessage, setShortcutMessage] = useState<string | null>(null);
+  const shortcutMessageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showShortcutMessage = useCallback((msg: string) => {
+    setShortcutMessage(msg);
+    if (shortcutMessageTimerRef.current) clearTimeout(shortcutMessageTimerRef.current);
+    shortcutMessageTimerRef.current = setTimeout(() => setShortcutMessage(null), 2500);
+  }, []);
+  // Clear any pending timer on unmount — otherwise a setTimeout that fires
+  // after navigation will call setState on an unmounted component.
+  useEffect(() => {
+    return () => {
+      if (shortcutMessageTimerRef.current) clearTimeout(shortcutMessageTimerRef.current);
+    };
+  }, []);
+
+  // Story 9.2 AC7 #21: the shell broadcasts `mega:overlay:opened` when the
+  // command palette or shortcut help overlay opens. Clear the board focus
+  // cursor so the blue ring doesn't sit behind the overlay looking stale.
+  useEffect(() => {
+    const onOverlayOpened = () => setFocusedIssueId(null);
+    window.addEventListener('mega:overlay:opened', onOverlayOpened);
+    return () => window.removeEventListener('mega:overlay:opened', onOverlayOpened);
+  }, []);
 
   // Monotonic request token: rapid filter changes fire overlapping fetches,
   // so a slower earlier fetch could overwrite fresh state. The token check
@@ -597,6 +637,74 @@ export default function ProjectPage() {
     setOverColumnId(event.over ? String(event.over.id) : null);
   }
 
+  // Story 9.2: single transition code path shared by drag-and-drop and
+  // keyboard shortcuts (I/R/D). Callers own their own permission checks and
+  // same-status early returns — this function assumes the transition is
+  // authorized and actually changes status.
+  const transitionIssue = useCallback(
+    (issue: Issue, newStatusId: string) => {
+      dismissConflict();
+
+      const oldStatusId = issue.statusId;
+      const oldVersion = issue.issueVersion;
+
+      markSelfMutation(issue.id);
+      setIssues((prev) =>
+        prev.map((i) =>
+          i.id === issue.id ? { ...i, statusId: newStatusId } : i,
+        ),
+      );
+
+      apiClient
+        .patch<Issue>(`/projects/${projectKey}/issues/${issue.id}`, {
+          statusId: newStatusId,
+          issueVersion: oldVersion,
+        })
+        .then((updated) => {
+          if (updated) {
+            setIssues((prev) =>
+              prev.map((i) =>
+                i.id === issue.id ? { ...i, ...updated } : i,
+              ),
+            );
+          }
+          // Under an active filter the updated issue may no longer match —
+          // refetch so it disappears from the board cleanly. Acceptable
+          // simplification: don't reimplement the server filter predicate in JS.
+          if (filterActive) {
+            loadData();
+          }
+        })
+        .catch((err: unknown) => {
+          setIssues((prev) =>
+            prev.map((i) =>
+              i.id === issue.id ? { ...i, statusId: oldStatusId, issueVersion: oldVersion } : i,
+            ),
+          );
+          const e = err as {
+            code?: number;
+            error?: string;
+            rule?: WorkflowPromptRule;
+          };
+          if (e?.code === 409) {
+            showConflict(issue.id);
+          } else if (e?.code === 422 && e.error === 'WorkflowRuleViolation' && e.rule) {
+            setWorkflowPrompt({
+              issueId: issue.id,
+              issueKey: issue.issueKey,
+              oldStatusId,
+              newStatusId,
+              oldVersion,
+              rule: e.rule,
+            });
+            setWorkflowPromptValue('');
+            setWorkflowPromptError(null);
+          }
+        });
+    },
+    [projectKey, filterActive, loadData, markSelfMutation, dismissConflict, showConflict],
+  );
+
   function handleDragEnd(event: DragEndEvent) {
     setActiveIssue(null);
     setOverColumnId(null);
@@ -611,69 +719,168 @@ export default function ProjectPage() {
     const newStatusId = over.id as string;
     if (issue.statusId === newStatusId) return;
 
-    // Starting a new drag dismisses any prior conflict notification
-    dismissConflict();
-
-    // Optimistic update
-    const oldStatusId = issue.statusId;
-    const oldVersion = issue.issueVersion;
-
-    markSelfMutation(issue.id);
-    setIssues((prev) =>
-      prev.map((i) =>
-        i.id === issue.id ? { ...i, statusId: newStatusId } : i,
-      ),
-    );
-
-    // Server update
-    apiClient
-      .patch<Issue>(`/projects/${projectKey}/issues/${issue.id}`, {
-        statusId: newStatusId,
-        issueVersion: oldVersion,
-      })
-      .then((updated) => {
-        if (updated) {
-          setIssues((prev) =>
-            prev.map((i) =>
-              i.id === issue.id ? { ...i, ...updated } : i,
-            ),
-          );
-        }
-        // Under an active filter the updated issue may no longer match —
-        // refetch so it disappears from the board cleanly. Acceptable
-        // simplification: don't reimplement the server filter predicate in JS.
-        if (filterActive) {
-          loadData();
-        }
-      })
-      .catch((err: unknown) => {
-        // Rollback in all error cases
-        setIssues((prev) =>
-          prev.map((i) =>
-            i.id === issue.id ? { ...i, statusId: oldStatusId, issueVersion: oldVersion } : i,
-          ),
-        );
-        const e = err as {
-          code?: number;
-          error?: string;
-          rule?: WorkflowPromptRule;
-        };
-        if (e?.code === 409) {
-          showConflict(issue.id);
-        } else if (e?.code === 422 && e.error === 'WorkflowRuleViolation' && e.rule) {
-          setWorkflowPrompt({
-            issueId: issue.id,
-            issueKey: issue.issueKey,
-            oldStatusId,
-            newStatusId,
-            oldVersion,
-            rule: e.rule,
-          });
-          setWorkflowPromptValue('');
-          setWorkflowPromptError(null);
-        }
-      });
+    transitionIssue(issue, newStatusId);
   }
+
+  // Story 9.2: board keyboard shortcuts. The shell dispatches
+  // `mega:shortcut:board-*` window events; we listen here and mutate the
+  // board focus / transition state. Re-subscribes whenever issues, statuses,
+  // focusedIssueId, canTransition, or transitionIssue change so the handlers
+  // always see fresh data.
+  useEffect(() => {
+    const buildGrid = (): Array<{ statusId: string; issues: Issue[] }> => {
+      const sortedStatuses = [...statuses].sort((a, b) => a.position - b.position);
+      return sortedStatuses.map((s) => ({
+        statusId: s.id,
+        issues: issues.filter((i) => i.statusId === s.id),
+      }));
+    };
+
+    const findFirstFocusable = (): string | null => {
+      const grid = buildGrid();
+      for (const col of grid) {
+        if (col.issues.length > 0) return col.issues[0].id;
+      }
+      return null;
+    };
+
+    const locate = (
+      id: string | null,
+    ): { colIdx: number; rowIdx: number } | null => {
+      if (!id) return null;
+      const grid = buildGrid();
+      for (let c = 0; c < grid.length; c++) {
+        const r = grid[c].issues.findIndex((i) => i.id === id);
+        if (r !== -1) return { colIdx: c, rowIdx: r };
+      }
+      return null;
+    };
+
+    const scrollCardIntoView = (id: string) => {
+      requestAnimationFrame(() => {
+        // CSS.escape guards against any future ID format that might contain
+        // characters special to attribute selectors (`"`, `]`, `\`). UUIDs
+        // today are safe, but the cost of escaping is a no-op.
+        const escaped = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+          ? CSS.escape(id)
+          : id;
+        const el = document.querySelector<HTMLElement>(`[data-issue-id="${escaped}"]`);
+        el?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      });
+    };
+
+    const onArrow = (e: Event) => {
+      const detail = (e as CustomEvent).detail as
+        | { direction?: 'left' | 'right' | 'up' | 'down' }
+        | null;
+      const dir = detail?.direction;
+      if (!dir) return;
+      const grid = buildGrid();
+
+      if (!focusedIssueId) {
+        const first = findFirstFocusable();
+        if (first) {
+          setFocusedIssueId(first);
+          scrollCardIntoView(first);
+        }
+        return;
+      }
+
+      const pos = locate(focusedIssueId);
+      if (!pos) {
+        const first = findFirstFocusable();
+        setFocusedIssueId(first);
+        if (first) scrollCardIntoView(first);
+        return;
+      }
+
+      let next: string | null = null;
+      if (dir === 'up' || dir === 'down') {
+        const col = grid[pos.colIdx].issues;
+        if (col.length === 0) return;
+        const step = dir === 'down' ? 1 : -1;
+        const nextRow = (pos.rowIdx + step + col.length) % col.length;
+        next = col[nextRow].id;
+      } else {
+        // Horizontal: walk to the next non-empty column in the requested
+        // direction, wrapping after a full lap. Bound is `< grid.length`
+        // (not `<=`) so we never revisit the focused card's own column —
+        // otherwise, if every other column is empty, we would land back on
+        // ourselves and jump focus to the top of the current column.
+        const step = dir === 'right' ? 1 : -1;
+        for (let k = 1; k < grid.length; k++) {
+          const c = (pos.colIdx + step * k + grid.length * grid.length) % grid.length;
+          if (grid[c].issues.length > 0) {
+            next = grid[c].issues[0].id;
+            break;
+          }
+        }
+      }
+
+      if (next) {
+        setFocusedIssueId(next);
+        scrollCardIntoView(next);
+      }
+    };
+
+    const onEnter = () => {
+      if (!focusedIssueId) return;
+      // Defensive: real-time events may have removed the focused issue
+      // between the last focus move and Enter. Don't open a ghost panel.
+      if (!issues.some((i) => i.id === focusedIssueId)) {
+        setFocusedIssueId(null);
+        return;
+      }
+      setSelectedIssueId(focusedIssueId);
+    };
+
+    const onTransition = (e: Event) => {
+      if (!canTransition) return;
+      if (!focusedIssueId) return;
+      const detail = (e as CustomEvent).detail as
+        | { target?: 'in-progress' | 'in-review' | 'done' }
+        | null;
+      const target = detail?.target;
+      if (!target) return;
+
+      const issue = issues.find((i) => i.id === focusedIssueId);
+      if (!issue) return;
+
+      // Match by status name. Custom workflows (Story 4.1) mean we cannot
+      // hardcode IDs. Resolution strategy, strongest match wins:
+      //   1. Exact (case-insensitive) match against the canonical label
+      //      ("In Progress" / "In Review" / "Done").
+      //   2. Word-boundary regex match ("\\bdone\\b") — rejects "Redone",
+      //      "Undone", "Preview Ready", etc.
+      //   3. Fallback substring match so unusual labels still resolve
+      //      ("Work In Progress", "Code Review", "Shipped / Done").
+      const canonical =
+        target === 'in-progress' ? 'In Progress' : target === 'in-review' ? 'In Review' : 'Done';
+      const needle = canonical.toLowerCase();
+      const lowered = statuses.map((s) => ({ s, name: s.name.toLowerCase() }));
+      const wordBoundary = new RegExp(`\\b${needle.replace(/\s+/g, '\\s+')}\\b`);
+      const match =
+        lowered.find((x) => x.name === needle)?.s ??
+        lowered.find((x) => wordBoundary.test(x.name))?.s ??
+        lowered.find((x) => x.name.includes(needle))?.s;
+      if (!match) {
+        showShortcutMessage(`No "${canonical}" status in this project's workflow`);
+        return;
+      }
+      if (issue.statusId === match.id) return;
+
+      transitionIssue(issue, match.id);
+    };
+
+    window.addEventListener('mega:shortcut:board-arrow', onArrow);
+    window.addEventListener('mega:shortcut:board-enter', onEnter);
+    window.addEventListener('mega:shortcut:board-transition', onTransition);
+    return () => {
+      window.removeEventListener('mega:shortcut:board-arrow', onArrow);
+      window.removeEventListener('mega:shortcut:board-enter', onEnter);
+      window.removeEventListener('mega:shortcut:board-transition', onTransition);
+    };
+  }, [issues, statuses, focusedIssueId, canTransition, transitionIssue, showShortcutMessage]);
 
   const cancelWorkflowPrompt = useCallback(() => {
     setWorkflowPrompt(null);
@@ -903,7 +1110,17 @@ export default function ProjectPage() {
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-2 overflow-x-auto pb-4 flex-1">
+        <div
+          role="grid"
+          aria-label="Issue board, use arrow keys to navigate, Enter to open"
+          className="flex gap-2 overflow-x-auto pb-4 flex-1"
+          onClick={(e) => {
+            // Clicking blank space inside the grid (not on a card) clears
+            // the keyboard focus cursor per AC7 #21.
+            const el = e.target as HTMLElement;
+            if (!el.closest('[data-issue-id]')) setFocusedIssueId(null);
+          }}
+        >
           {statuses.map((status) => {
             const columnIssues = issuesByStatus.get(status.id) ?? [];
 
@@ -923,9 +1140,13 @@ export default function ProjectPage() {
                     <DraggableIssueCard
                       key={issue.id}
                       issue={issue}
-                      onClick={() => setSelectedIssueId(issue.id)}
+                      onClick={() => {
+                        setFocusedIssueId(issue.id);
+                        setSelectedIssueId(issue.id);
+                      }}
                       epicProgress={issue.type === 'epic' ? epicProgress[issue.id] : undefined}
                       isPulsing={pulsingIssueIds.has(issue.id)}
+                      isFocused={focusedIssueId === issue.id}
                     />
                   ))
                 )}
@@ -963,6 +1184,15 @@ export default function ProjectPage() {
           />
         )}
       </SlideOverPanel>
+      {shortcutMessage && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[70] px-3 py-2 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-3)] shadow-md text-xs text-[var(--color-text-primary)]"
+        >
+          {shortcutMessage}
+        </div>
+      )}
     </div>
     </ToastProvider>
   );
