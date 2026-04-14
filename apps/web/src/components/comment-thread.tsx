@@ -21,11 +21,12 @@ interface CommentThreadProps {
   projectKey: string;
   issueId: string;
   users: Array<{ id: string; email: string }>;
+  canComment?: boolean;
 }
 
 const MAX_BODY = 10000;
 
-export function CommentThread({ projectKey, issueId, users }: CommentThreadProps) {
+export function CommentThread({ projectKey, issueId, users, canComment = true }: CommentThreadProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState('');
@@ -255,10 +256,10 @@ export function CommentThread({ projectKey, issueId, users }: CommentThreadProps
           value={draft}
           onChange={handleDraftChange}
           onKeyDown={handleKeyDown}
-          disabled={submitting}
+          disabled={submitting || !canComment}
           rows={3}
           aria-label="Comment body"
-          placeholder="Leave a comment… (supports Markdown, @mention users)"
+          placeholder={canComment ? 'Leave a comment… (supports Markdown, @mention users)' : 'You do not have permission to comment on this project'}
           className="w-full text-sm px-2 py-1.5 rounded border border-[var(--color-surface-3)] bg-[var(--color-surface-0)] text-[var(--color-text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent-blue)] resize-none max-h-40 overflow-y-auto"
         />
         {mentionQuery !== null && (
@@ -284,7 +285,7 @@ export function CommentThread({ projectKey, issueId, users }: CommentThreadProps
             <button
               type="button"
               onClick={submit}
-              disabled={submitting || overLimit || draft.trim().length === 0}
+              disabled={submitting || overLimit || draft.trim().length === 0 || !canComment}
               className="text-xs px-3 py-1 rounded bg-[var(--color-accent-blue)] text-white hover:bg-[var(--color-accent-blue-dark)] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submitting ? 'Posting…' : 'Comment'}

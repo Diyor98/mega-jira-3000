@@ -5,6 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { CommentsService, extractMentions } from './comments.service';
+import { createRbacMock, createRbacDenyMock } from '../../test-utils/rbac-mock';
 
 /**
  * Build a flexible chain result for `db.select()`. The service uses these
@@ -387,9 +388,15 @@ describe('CommentsService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('throws ForbiddenException for non-owner of project', async () => {
-      const db = makeDb([[otherProject]]);
-      service = new CommentsService(db, mockEventService, mockNotificationsService);
+    it('RBAC: throws ForbiddenException when assertAction denies', async () => {
+      const db = makeDb([]);
+      service = new CommentsService(
+        db,
+        mockEventService,
+        mockNotificationsService,
+        undefined,
+        createRbacDenyMock('comment.create') as any,
+      );
       await expect(
         service.create('MJ', 'issue-1', userId, { body: 'Hi' }),
       ).rejects.toThrow(ForbiddenException);
@@ -485,9 +492,15 @@ describe('CommentsService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('throws ForbiddenException for non-owner', async () => {
-      const db = makeDb([[otherProject]]);
-      service = new CommentsService(db, mockEventService, mockNotificationsService);
+    it('RBAC: denies via assertAction when caller has no project access', async () => {
+      const db = makeDb([]);
+      service = new CommentsService(
+        db,
+        mockEventService,
+        mockNotificationsService,
+        undefined,
+        createRbacDenyMock('project.read') as any,
+      );
       await expect(
         service.listByIssue('MJ', 'issue-1', userId),
       ).rejects.toThrow(ForbiddenException);

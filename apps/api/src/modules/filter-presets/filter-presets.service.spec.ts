@@ -6,6 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { FilterPresetsService } from './filter-presets.service';
+import { createRbacDenyMock } from '../../test-utils/rbac-mock';
 
 /**
  * Small queue-based mock builder. Each `db.select()` call dequeues one
@@ -142,9 +143,13 @@ describe('FilterPresetsService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('throws ForbiddenException for non-owner of project', async () => {
-      const db = makeDb([[otherProject]]);
-      service = new FilterPresetsService(db);
+    it('RBAC: denies via assertAction', async () => {
+      const db = makeDb([]);
+      service = new FilterPresetsService(
+        db,
+        undefined,
+        createRbacDenyMock('filter.write') as any,
+      );
       await expect(
         service.create('MJ', userId, { name: 'x', filterConfig: validConfig }),
       ).rejects.toThrow(ForbiddenException);
@@ -174,9 +179,13 @@ describe('FilterPresetsService', () => {
       expect(result).toEqual(rows);
     });
 
-    it('throws ForbiddenException for non-owner', async () => {
-      const db = makeDb([[otherProject]]);
-      service = new FilterPresetsService(db);
+    it('RBAC: denies via assertAction', async () => {
+      const db = makeDb([]);
+      service = new FilterPresetsService(
+        db,
+        undefined,
+        createRbacDenyMock('filter.read') as any,
+      );
       await expect(service.list('MJ', userId)).rejects.toThrow(ForbiddenException);
     });
   });
@@ -211,9 +220,13 @@ describe('FilterPresetsService', () => {
       await expect(service.delete('MJ', userId, 'p1')).rejects.toThrow(NotFoundException);
     });
 
-    it('throws ForbiddenException for non-owner of project', async () => {
-      const db = makeDb([[otherProject]]);
-      service = new FilterPresetsService(db);
+    it('RBAC: denies via assertAction', async () => {
+      const db = makeDb([]);
+      service = new FilterPresetsService(
+        db,
+        undefined,
+        createRbacDenyMock('filter.write') as any,
+      );
       await expect(service.delete('MJ', userId, 'p1')).rejects.toThrow(ForbiddenException);
     });
 

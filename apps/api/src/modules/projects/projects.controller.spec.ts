@@ -1,20 +1,40 @@
+import { ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
+import { RbacService } from '../rbac/rbac.service';
+import { createRbacMock, createRbacDenyMock } from '../../test-utils/rbac-mock';
 
 describe('ProjectsController', () => {
   let controller: ProjectsController;
-  let projectsService: { create: jest.Mock; findByOwner: jest.Mock; getStatuses: jest.Mock };
+  let projectsService: {
+    create: jest.Mock;
+    findByOwner: jest.Mock;
+    getStatuses: jest.Mock;
+    updateMetadata: jest.Mock;
+  };
 
-  beforeEach(async () => {
-    projectsService = { create: jest.fn(), findByOwner: jest.fn(), getStatuses: jest.fn() };
+  async function buildController(rbac?: unknown) {
+    projectsService = {
+      create: jest.fn(),
+      findByOwner: jest.fn(),
+      getStatuses: jest.fn(),
+      updateMetadata: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ProjectsController],
-      providers: [{ provide: ProjectsService, useValue: projectsService }],
+      providers: [
+        { provide: ProjectsService, useValue: projectsService },
+        { provide: RbacService, useValue: rbac ?? createRbacMock('project_admin') },
+      ],
     }).compile();
 
     controller = module.get<ProjectsController>(ProjectsController);
+  }
+
+  beforeEach(async () => {
+    await buildController();
   });
 
   describe('POST /api/v1/projects', () => {
@@ -62,10 +82,34 @@ describe('ProjectsController', () => {
       ];
       projectsService.getStatuses.mockResolvedValue(mockStatuses);
 
-      const result = await controller.getStatuses('MEGA');
+      const mockReq = { user: { userId: 'user-id' } } as never;
+      const result = await controller.getStatuses('MEGA', mockReq);
 
       expect(projectsService.getStatuses).toHaveBeenCalledWith('MEGA');
       expect(result).toEqual(mockStatuses);
+    });
+  });
+
+  describe('PATCH /api/v1/projects/:projectKey', () => {
+    it('calls service.updateMetadata when user has project.edit', async () => {
+      const updated = { id: 'p1', name: 'New', key: 'MEGA', description: null, ownerId: 'user-id', createdAt: new Date() };
+      projectsService.updateMetadata.mockResolvedValue(updated);
+
+      const mockReq = { user: { userId: 'user-id' } } as never;
+      const result = await controller.update('MEGA', { name: 'New' }, mockReq);
+
+      expect(projectsService.updateMetadata).toHaveBeenCalledWith('MEGA', { name: 'New' }, 'user-id');
+      expect(result).toEqual(updated);
+    });
+
+    it('throws 403 when rbac denies project.edit', async () => {
+      await buildController(createRbacDenyMock('project.edit'));
+      const mockReq = { user: { userId: 'user-id' } } as never;
+
+      await expect(
+        controller.update('MEGA', { name: 'New' }, mockReq),
+      ).rejects.toThrow(ForbiddenException);
+      expect(projectsService.updateMetadata).not.toHaveBeenCalled();
     });
   });
 

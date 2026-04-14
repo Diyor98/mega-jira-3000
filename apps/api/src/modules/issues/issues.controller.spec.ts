@@ -49,7 +49,7 @@ describe('IssuesController', () => {
       ];
       issuesService.findByProject.mockResolvedValue(expectedIssues);
 
-      const result = await controller.findAll('MEGA', {});
+      const result = await controller.findAll('MEGA', {}, { user: { userId: 'u1' } } as never);
 
       expect(issuesService.findByProject).toHaveBeenCalledWith('MEGA', {});
       expect(result).toEqual(expectedIssues);
@@ -61,7 +61,7 @@ describe('IssuesController', () => {
       const expectedIssue = { id: 'issue-id', issueKey: 'MEGA-1', title: 'Fix bug' };
       issuesService.findById.mockResolvedValue(expectedIssue);
 
-      const result = await controller.findById('MEGA', 'issue-id');
+      const result = await controller.findById('MEGA', 'issue-id', { user: { userId: 'u1' } } as never);
 
       expect(issuesService.findById).toHaveBeenCalledWith('MEGA', 'issue-id');
       expect(result).toEqual(expectedIssue);
@@ -73,7 +73,7 @@ describe('IssuesController', () => {
       const mockChildren = [{ id: 'c1', issueKey: 'MEGA-2' }];
       issuesService.findChildren.mockResolvedValue(mockChildren);
 
-      const result = await controller.findChildren('MEGA', '00000000-0000-0000-0000-000000000001');
+      const result = await controller.findChildren('MEGA', '00000000-0000-0000-0000-000000000001', { user: { userId: 'u1' } } as never);
 
       expect(issuesService.findChildren).toHaveBeenCalledWith('MEGA', '00000000-0000-0000-0000-000000000001');
       expect(result).toEqual(mockChildren);
@@ -85,7 +85,7 @@ describe('IssuesController', () => {
       const progress = { total: 5, completed: 3, percentage: 60 };
       issuesService.getProgress.mockResolvedValue(progress);
 
-      const result = await controller.getProgress('MEGA', '00000000-0000-0000-0000-000000000001');
+      const result = await controller.getProgress('MEGA', '00000000-0000-0000-0000-000000000001', { user: { userId: 'u1' } } as never);
 
       expect(issuesService.getProgress).toHaveBeenCalledWith('MEGA', '00000000-0000-0000-0000-000000000001');
       expect(result).toEqual(progress);
@@ -111,7 +111,7 @@ describe('IssuesController', () => {
       const mockLinks = [{ linkId: 'l1', linkType: 'related', issue: { issueKey: 'MEGA-2' } }];
       issuesService.getLinks.mockResolvedValue(mockLinks);
 
-      const result = await controller.getLinks('MEGA', 'issue-id');
+      const result = await controller.getLinks('MEGA', 'issue-id', { user: { userId: 'u1' } } as never);
 
       expect(issuesService.getLinks).toHaveBeenCalledWith('MEGA', 'issue-id');
       expect(result).toEqual(mockLinks);

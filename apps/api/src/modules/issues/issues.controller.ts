@@ -1,13 +1,37 @@
-import { Controller, Post, Get, Patch, Delete, Body, Param, Query, HttpCode, HttpStatus, Req } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Query,
+  HttpCode,
+  HttpStatus,
+  Req,
+  Optional,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import { IssuesService } from './issues.service';
 import type { CreateIssueDto } from './dto/create-issue.dto';
 import type { UpdateIssueDto } from './dto/update-issue.dto';
 import type { CreateIssueLinkDto } from './dto/create-issue-link.dto';
+import { RbacService } from '../rbac/rbac.service';
 
 @Controller('api/v1/projects/:projectKey/issues')
 export class IssuesController {
-  constructor(private readonly issuesService: IssuesService) {}
+  constructor(
+    private readonly issuesService: IssuesService,
+    @Optional() private readonly rbac?: RbacService,
+  ) {}
+
+  private async gateRead(projectKey: string, req: Request) {
+    if (this.rbac) {
+      const userId = (req as any).user.userId;
+      await this.rbac.assertAction(projectKey, userId, 'project.read');
+    }
+  }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -25,7 +49,9 @@ export class IssuesController {
   async findAll(
     @Param('projectKey') projectKey: string,
     @Query() query: Record<string, unknown>,
+    @Req() req: Request,
   ) {
+    await this.gateRead(projectKey, req);
     return this.issuesService.findByProject(projectKey, query);
   }
 
@@ -34,7 +60,9 @@ export class IssuesController {
   async findChildren(
     @Param('projectKey') projectKey: string,
     @Param('issueId') issueId: string,
+    @Req() req: Request,
   ) {
+    await this.gateRead(projectKey, req);
     return this.issuesService.findChildren(projectKey, issueId);
   }
 
@@ -55,7 +83,9 @@ export class IssuesController {
   async getLinks(
     @Param('projectKey') projectKey: string,
     @Param('issueId') issueId: string,
+    @Req() req: Request,
   ) {
+    await this.gateRead(projectKey, req);
     return this.issuesService.getLinks(projectKey, issueId);
   }
 
@@ -76,7 +106,9 @@ export class IssuesController {
   async getProgress(
     @Param('projectKey') projectKey: string,
     @Param('issueId') issueId: string,
+    @Req() req: Request,
   ) {
+    await this.gateRead(projectKey, req);
     return this.issuesService.getProgress(projectKey, issueId);
   }
 
@@ -85,7 +117,9 @@ export class IssuesController {
   async findById(
     @Param('projectKey') projectKey: string,
     @Param('issueId') issueId: string,
+    @Req() req: Request,
   ) {
+    await this.gateRead(projectKey, req);
     return this.issuesService.findById(projectKey, issueId);
   }
 

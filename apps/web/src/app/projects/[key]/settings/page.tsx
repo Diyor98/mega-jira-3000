@@ -5,6 +5,9 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { apiClient } from '../../../../lib/api-client';
 import { TeamSection } from '../../../../components/team-section';
+import { AuditTrail } from '../../../../components/audit-trail';
+import { ToastProvider, useToast } from '../../../../components/toast';
+import { useProjectPermissions } from '../../../../lib/use-project-permissions';
 
 interface Status {
   id: string;
@@ -16,6 +19,7 @@ interface Project {
   id: string;
   key: string;
   name: string;
+  description: string | null;
   ownerId: string;
 }
 
@@ -40,13 +44,33 @@ function asError(e: unknown): ApiError {
 }
 
 export default function ProjectSettingsPage() {
+  return (
+    <ToastProvider>
+      <ProjectSettingsInner />
+    </ToastProvider>
+  );
+}
+
+function ProjectSettingsInner() {
   const params = useParams();
   const projectKey = params.key as string;
+  const toast = useToast();
 
   const [statuses, setStatuses] = useState<Status[]>([]);
   const [rules, setRules] = useState<Rule[]>([]);
   const [isOwner, setIsOwner] = useState(false);
   const [ownerUserId, setOwnerUserId] = useState<string>('');
+  const { can: canPerm } = useProjectPermissions(projectKey);
+  const canEditWorkflow = canPerm('workflow.edit');
+  const canEditProject = canPerm('project.edit');
+  const canViewAudit = canPerm('audit.view');
+
+  // Project metadata edit state
+  const [project, setProject] = useState<Project | null>(null);
+  const [metaName, setMetaName] = useState('');
+  const [metaDescription, setMetaDescription] = useState('');
+  const [savingMeta, setSavingMeta] = useState(false);
+  const [metaError, setMetaError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,7 +107,12 @@ export default function ProjectSettingsPage() {
       ]);
       const found = (projects ?? []).find((p) => p.key === projectKey) ?? null;
       setIsOwner(!!found);
-      if (found) setOwnerUserId(found.ownerId);
+      if (found) {
+        setOwnerUserId(found.ownerId);
+        setProject(found);
+        setMetaName(found.name);
+        setMetaDescription(found.description ?? '');
+      }
       setStatuses(sts ?? []);
       // Rules endpoint is owner-gated; only attempt when we know we own it.
       if (found) {
@@ -110,6 +139,48 @@ export default function ProjectSettingsPage() {
   }, [loadAll]);
 
   // ---------- mutations ----------
+
+  async function handleSaveMetadata(e: React.FormEvent) {
+    e.preventDefault();
+    if (!project) return;
+    const nameTrimmed = metaName.trim();
+    if (!nameTrimmed) {
+      setMetaError('Project name is required');
+      return;
+    }
+    if (nameTrimmed.length > 100) {
+      setMetaError('Project name must be 100 characters or fewer');
+      return;
+    }
+    if (metaDescription.length > 500) {
+      setMetaError('Description must be 500 characters or fewer');
+      return;
+    }
+    setMetaError(null);
+    setSavingMeta(true);
+    try {
+      const dto: { name?: string; description?: string | null } = {};
+      if (nameTrimmed !== project.name) dto.name = nameTrimmed;
+      const newDesc = metaDescription === '' ? null : metaDescription;
+      if (newDesc !== project.description) dto.description = newDesc;
+      if (dto.name === undefined && dto.description === undefined) {
+        setSavingMeta(false);
+        return;
+      }
+      const updated = await apiClient.patch<Project>(
+        `/projects/${encodeURIComponent(projectKey)}`,
+        dto,
+      );
+      setProject(updated);
+      setMetaName(updated.name);
+      setMetaDescription(updated.description ?? '');
+      toast.success('Project updated');
+    } catch (e) {
+      setMetaError(asError(e).message ?? 'Failed to update project');
+    } finally {
+      setSavingMeta(false);
+    }
+  }
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -314,9 +385,81 @@ export default function ProjectSettingsPage() {
         </Link>
       </div>
 
-      {!isOwner && (
+      <nav className="mb-4 flex items-center gap-3 text-xs text-[var(--color-text-secondary)]">
+        {project && (
+          <>
+            <a href="#project-info" className="hover:underline">Project</a>
+            <span aria-hidden>·</span>
+          </>
+        )}
+        <a href="#workflow" className="hover:underline">Workflow</a>
+        <span aria-hidden>·</span>
+        <a href="#team" className="hover:underline">Team</a>
+        {canViewAudit && (
+          <>
+            <span aria-hidden>·</span>
+            <a href="#audit-trail" className="hover:underline">Audit Trail</a>
+          </>
+        )}
+      </nav>
+
+      {project && (
+        <section id="project-info" className="mb-8">
+          <h2 className="text-base font-semibold text-[var(--color-text-primary)] mb-3">
+            Project Details
+          </h2>
+          <form onSubmit={handleSaveMetadata} className="flex flex-col gap-3 max-w-xl">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-[var(--color-text-secondary)]">Name</span>
+              <input
+                type="text"
+                value={metaName}
+                onChange={(e) => setMetaName(e.target.value)}
+                disabled={!canEditProject || savingMeta}
+                maxLength={100}
+                className="text-sm px-2 py-1.5 rounded border border-[var(--color-surface-3)] bg-[var(--color-surface-0)] text-[var(--color-text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent-blue)] disabled:opacity-60"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-[var(--color-text-secondary)] flex items-center justify-between">
+                <span>Description</span>
+                <span className={metaDescription.length > 500 ? 'text-[var(--color-status-red)]' : 'text-[var(--color-text-tertiary)]'}>
+                  {metaDescription.length}/500
+                </span>
+              </span>
+              <textarea
+                value={metaDescription}
+                onChange={(e) => setMetaDescription(e.target.value)}
+                disabled={!canEditProject || savingMeta}
+                rows={3}
+                className="text-sm px-2 py-1.5 rounded border border-[var(--color-surface-3)] bg-[var(--color-surface-0)] text-[var(--color-text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent-blue)] disabled:opacity-60 resize-none"
+              />
+            </label>
+            {metaError && (
+              <p className="text-xs text-[var(--color-status-red)]">{metaError}</p>
+            )}
+            {canEditProject && (
+              <div>
+                <button
+                  type="submit"
+                  disabled={savingMeta}
+                  className="px-3 py-1.5 text-sm font-medium rounded bg-[var(--color-accent-blue)] text-white hover:bg-[var(--color-accent-blue-dark)] transition-colors disabled:opacity-50"
+                >
+                  {savingMeta ? 'Saving…' : 'Save Changes'}
+                </button>
+              </div>
+            )}
+          </form>
+        </section>
+      )}
+
+      <h2 id="workflow" className="text-base font-semibold text-[var(--color-text-primary)] mb-3">
+        Workflow
+      </h2>
+
+      {!canEditWorkflow && (
         <div className="mb-3 px-3 py-2 rounded bg-amber-50 border border-amber-200 text-amber-800 text-sm">
-          You are not the owner of this project. Workflow editing is read-only.
+          You do not have permission to edit this workflow. Settings are read-only.
         </div>
       )}
 
@@ -401,7 +544,7 @@ export default function ProjectSettingsPage() {
                 <span className="text-sm text-[var(--color-text-primary)]">{s.name}</span>
               )}
             </div>
-            {isOwner && renamingId !== s.id && (
+            {canEditWorkflow && renamingId !== s.id && (
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -446,7 +589,7 @@ export default function ProjectSettingsPage() {
         ))}
       </div>
 
-      {isOwner && (
+      {canEditWorkflow && (
         <form onSubmit={handleAdd} className="mt-4 flex items-center gap-2">
           <input
             value={newName}
@@ -490,7 +633,7 @@ export default function ProjectSettingsPage() {
                 <strong>{statusName(r.fromStatusId)}</strong> →{' '}
                 <strong>{statusName(r.toStatusId)}</strong>
               </span>
-              {isOwner && (
+              {canEditWorkflow && (
                 <button
                   type="button"
                   onClick={() => handleDeleteRule(r.id)}
@@ -504,7 +647,7 @@ export default function ProjectSettingsPage() {
         )}
       </div>
 
-      {isOwner && statuses.length > 0 && (
+      {canEditWorkflow && statuses.length > 0 && (
         <form onSubmit={handleAddRule} className="mt-4 flex flex-wrap items-center gap-2">
           <label className="text-sm text-[var(--color-text-secondary)]">From</label>
           <select
@@ -551,11 +694,16 @@ export default function ProjectSettingsPage() {
         </form>
       )}
 
-      <TeamSection
-        projectKey={projectKey}
-        canManage={isOwner}
-        ownerUserId={ownerUserId}
-      />
+      {/* Story 8.2: canManage now flows from the RBAC permission map */}
+      <div id="team">
+        <TeamSection
+          projectKey={projectKey}
+          canManage={canPerm('member.manage')}
+          ownerUserId={ownerUserId}
+        />
+      </div>
+
+      {canViewAudit && <AuditTrail projectKey={projectKey} />}
     </div>
   );
 }

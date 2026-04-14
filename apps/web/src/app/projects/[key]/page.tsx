@@ -17,6 +17,7 @@ import {
 } from '@dnd-kit/core';
 import { apiClient } from '../../../lib/api-client';
 import { CreateIssueForm } from '../../../components/create-issue-form';
+import { useProjectPermissions } from '../../../lib/use-project-permissions';
 import { SlideOverPanel } from '../../../components/slide-over-panel';
 import { IssueDetailPanel } from '../../../components/issue-detail-panel';
 import { useWebSocket } from '../../../hooks/use-websocket';
@@ -25,6 +26,7 @@ import { WorkflowPrompt, type WorkflowPromptRule } from '../../../components/wor
 import { FilterBar, EMPTY_FILTER, hasAnyFilter, type FilterValue, type FilterPreset } from '../../../components/filter-bar';
 import { NotificationBell } from '../../../components/notification-bell';
 import { ToastProvider } from '../../../components/toast';
+import { PENDING_OPEN_ISSUE_KEY } from '../../../lib/palette-actions';
 
 function parseFilterFromSearch(sp: URLSearchParams): FilterValue {
   const splitCsv = (v: string | null) => (v ? v.split(',').filter(Boolean) : []);
@@ -142,7 +144,7 @@ function IssueCardContent({ issue, epicProgress }: { issue: Issue; epicProgress?
       <p className="text-sm text-[var(--color-text-primary)] line-clamp-2">
         {issue.title}
       </p>
-      <div className="flex items-center gap-1 mt-1.5">
+      <div className="hidden lg:flex items-center gap-1 mt-1.5">
         <span
           className="w-2 h-2 rounded-full inline-block"
           style={{ backgroundColor: priorityColor }}
@@ -180,7 +182,7 @@ function DroppableColumn({ status, children, isOver, issueCount }: {
   return (
     <div
       ref={setNodeRef}
-      className={`flex-shrink-0 w-56 rounded flex flex-col transition-colors duration-150 ${
+      className={`flex-shrink-0 w-[240px] lg:w-[280px] rounded flex flex-col transition-colors duration-150 ${
         isOver
           ? 'bg-[var(--color-accent-blue)]/5 border-2 border-[var(--color-accent-blue)]'
           : 'bg-[var(--color-surface-1)] border border-[var(--color-surface-3)]'
@@ -229,6 +231,10 @@ export default function ProjectPage() {
   const [statuses, setStatuses] = useState<Status[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  // Story 8.2: server-driven permissions for board-level controls.
+  const { can: canPerm } = useProjectPermissions(projectKey);
+  const canCreateIssue = canPerm('issue.create');
+  const canTransition = canPerm('issue.transition');
   // Initialize selectedIssueId from a `?issue=<id>` query param (deep-link
   // from NotificationBell rows). Read once on first render; the mount-time
   // effect below strips the param so a reload doesn't re-open the same issue.
@@ -426,6 +432,78 @@ export default function ProjectPage() {
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [searchParams, router, pathname]);
 
+  // Story 9.1: command-palette bridge. Same-route commands arrive via window
+  // events; cross-route commands arrive via sessionStorage (written by the
+  // palette before it called router.push — the target page's mount effects
+  // drain the pending key once `issues` has loaded).
+  const [pendingIssueKey, setPendingIssueKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onCreate = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { projectKey?: string } | null;
+      if (detail?.projectKey && detail.projectKey !== projectKey) return;
+      // Re-check server-driven permission before opening the form — the
+      // palette is UI-only and must not bypass authorization.
+      if (!canCreateIssue) return;
+      setShowCreateForm(true);
+    };
+    const onOpenIssue = (e: Event) => {
+      const detail = (e as CustomEvent).detail as
+        | { issueKey?: string; projectKey?: string }
+        | null;
+      if (!detail?.issueKey) return;
+      if (detail.projectKey && detail.projectKey !== projectKey) return;
+      setPendingIssueKey(detail.issueKey);
+    };
+    window.addEventListener('mega:command:create-issue', onCreate);
+    window.addEventListener('mega:command:open-issue', onOpenIssue);
+    return () => {
+      window.removeEventListener('mega:command:create-issue', onCreate);
+      window.removeEventListener('mega:command:open-issue', onOpenIssue);
+    };
+  }, [projectKey, canCreateIssue]);
+
+  // Drain any cross-route `mega:pending:open-issue` handoff once on project
+  // mount / project-key change. Safe to run before issues have loaded — the
+  // value queues into `pendingIssueKey` and the resolver effect below picks
+  // it up as soon as `issues` arrives.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let raw: string | null = null;
+    try {
+      raw = sessionStorage.getItem(PENDING_OPEN_ISSUE_KEY);
+    } catch {
+      return;
+    }
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as { issueKey?: string; projectKey?: string };
+      if (parsed.projectKey && parsed.projectKey !== projectKey) return;
+      if (!parsed.issueKey) return;
+      sessionStorage.removeItem(PENDING_OPEN_ISSUE_KEY);
+      setPendingIssueKey(parsed.issueKey);
+    } catch {
+      try {
+        sessionStorage.removeItem(PENDING_OPEN_ISSUE_KEY);
+      } catch {
+        /* noop */
+      }
+    }
+  }, [projectKey]);
+
+  // Resolve a pending issue key against the loaded issues list. Runs whenever
+  // issues change — the first successful match opens the detail panel and
+  // clears the pending state so a later refetch doesn't re-open it.
+  useEffect(() => {
+    if (!pendingIssueKey) return;
+    const target = pendingIssueKey.toUpperCase();
+    const match = issues.find((i) => i.issueKey.toUpperCase() === target);
+    if (match) {
+      setSelectedIssueId(match.id);
+      setPendingIssueKey(null);
+    }
+  }, [issues, pendingIssueKey]);
+
   // Load users once on mount for the workflow prompt assignee dropdown.
   useEffect(() => {
     apiClient
@@ -508,6 +586,9 @@ export default function ProjectPage() {
   }
 
   function handleDragStart(event: DragStartEvent) {
+    // Story 8.2: viewers (and any role lacking issue.transition) cannot
+    // initiate a drag. The card stays visible — just non-draggable.
+    if (!canTransition) return;
     const issue = event.active.data.current?.issue as Issue;
     setActiveIssue(issue ?? null);
   }
@@ -519,6 +600,7 @@ export default function ProjectPage() {
   function handleDragEnd(event: DragEndEvent) {
     setActiveIssue(null);
     setOverColumnId(null);
+    if (!canTransition) return;
 
     const { active, over } = event;
     if (!over) return;
@@ -745,7 +827,9 @@ export default function ProjectPage() {
           </Link>
           <button
             onClick={() => setShowCreateForm(true)}
-            className="px-3 py-1.5 text-sm font-medium rounded bg-[var(--color-accent-blue)] text-white hover:bg-[var(--color-accent-blue-dark)] transition-colors"
+            disabled={!canCreateIssue}
+            title={canCreateIssue ? undefined : 'You do not have permission to create issues'}
+            className="px-3 py-1.5 text-sm font-medium rounded bg-[var(--color-accent-blue)] text-white hover:bg-[var(--color-accent-blue-dark)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[var(--color-accent-blue)]"
           >
             + Create Issue
           </button>

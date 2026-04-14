@@ -7,10 +7,11 @@ import {
   HttpCode,
   HttpStatus,
   NotFoundException,
-  ForbiddenException,
   Inject,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
+import { RbacService } from '../rbac/rbac.service';
 import type { Request } from 'express';
 import { and, eq, lt, desc, sql } from 'drizzle-orm';
 import { DATABASE_TOKEN } from '../../database/database.module';
@@ -46,7 +47,10 @@ function decodeCursor(raw: string): Cursor {
 
 @Controller('api/v1/projects/:projectKey/audit-log')
 export class AuditController {
-  constructor(@Inject(DATABASE_TOKEN) private readonly db: Database) {}
+  constructor(
+    @Inject(DATABASE_TOKEN) private readonly db: Database,
+    @Optional() private readonly rbac?: RbacService,
+  ) {}
 
   @Get()
   @HttpCode(HttpStatus.OK)
@@ -58,6 +62,10 @@ export class AuditController {
   ) {
     const userId = (req as unknown as { user: { userId: string } }).user.userId;
 
+    if (this.rbac) {
+      await this.rbac.assertAction(projectKey, userId, 'audit.view');
+    }
+
     const [project] = await this.db
       .select({ id: projects.id, ownerId: projects.ownerId })
       .from(projects)
@@ -65,9 +73,6 @@ export class AuditController {
       .limit(1);
     if (!project) {
       throw new NotFoundException(`Project '${projectKey}' not found`);
-    }
-    if (project.ownerId !== userId) {
-      throw new ForbiddenException('You do not have access to this project');
     }
 
     const limit = Math.min(Math.max(Number(limitRaw) || 50, 1), 100);

@@ -15,6 +15,7 @@ import { AttachmentsModule } from './modules/attachments/attachments.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { LifecycleModule } from './modules/lifecycle/lifecycle.module';
 import { ProjectMembersModule } from './modules/project-members/project-members.module';
+import { RbacModule } from './modules/rbac/rbac.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
@@ -46,6 +47,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     }),
     ScheduleModule.forRoot(),
     DatabaseModule,
+    RbacModule,
     AuditModule,
     HealthModule,
     AuthModule,

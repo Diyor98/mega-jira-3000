@@ -6,6 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { WorkflowService } from './workflow.service';
+import { createRbacDenyMock } from '../../test-utils/rbac-mock';
 
 /**
  * These tests build small lookup-call queues so each `db.select()` invocation
@@ -93,10 +94,13 @@ describe('WorkflowService', () => {
   // ========== assertOwnership / lookup ==========
 
   describe('assertOwnership (via addStatus)', () => {
-    it('throws ForbiddenException when caller is not the project owner', async () => {
-      const db = makeDb([[otherProject], [workflow]]);
-      service = new WorkflowService(db);
-
+    it('RBAC: denies via assertAction', async () => {
+      const db = makeDb([]);
+      service = new WorkflowService(
+        db,
+        undefined,
+        createRbacDenyMock('workflow.edit') as any,
+      );
       await expect(
         service.addStatus('MJ', userId, { name: 'Peer Review' }),
       ).rejects.toThrow(ForbiddenException);
@@ -382,10 +386,13 @@ describe('WorkflowService', () => {
       );
     });
 
-    it('throws ForbiddenException for non-owner', async () => {
-      const db = makeDb([[otherProject]]);
-      service = new WorkflowService(db);
-
+    it('RBAC: denies via assertAction', async () => {
+      const db = makeDb([]);
+      service = new WorkflowService(
+        db,
+        undefined,
+        createRbacDenyMock('workflow.edit') as any,
+      );
       await expect(service.deleteStatus('MJ', userId, 'st-2')).rejects.toThrow(
         ForbiddenException,
       );
@@ -553,10 +560,13 @@ describe('WorkflowService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('throws ForbiddenException for non-owner', async () => {
-      const db = makeDb([[otherProject]]);
-      service = new WorkflowService(db);
-
+    it('RBAC: denies via assertAction', async () => {
+      const db = makeDb([]);
+      service = new WorkflowService(
+        db,
+        undefined,
+        createRbacDenyMock('workflow.edit') as any,
+      );
       await expect(
         service.addRule('MJ', userId, {
           fromStatusId: null,
@@ -721,9 +731,13 @@ describe('WorkflowService', () => {
       expect(result).toEqual(rows);
     });
 
-    it('throws ForbiddenException for non-owner', async () => {
-      const db = makeDb([[otherProject]]);
-      service = new WorkflowService(db);
+    it('RBAC: denies via assertAction', async () => {
+      const db = makeDb([]);
+      service = new WorkflowService(
+        db,
+        undefined,
+        createRbacDenyMock('workflow.edit') as any,
+      );
       await expect(service.listRules('MJ', userId)).rejects.toThrow(ForbiddenException);
     });
   });
@@ -756,9 +770,13 @@ describe('WorkflowService', () => {
       await expect(service.deleteRule('MJ', userId, 'r1')).rejects.toThrow(NotFoundException);
     });
 
-    it('throws ForbiddenException for non-owner', async () => {
-      const db = makeDb([[otherProject]]);
-      service = new WorkflowService(db);
+    it('RBAC: denies via assertAction', async () => {
+      const db = makeDb([]);
+      service = new WorkflowService(
+        db,
+        undefined,
+        createRbacDenyMock('workflow.edit') as any,
+      );
       await expect(service.deleteRule('MJ', userId, 'r1')).rejects.toThrow(ForbiddenException);
     });
   });

@@ -41,16 +41,19 @@ export function Sidebar() {
   if (isAuthPage) return null;
 
   return (
-    <aside className="w-56 flex-shrink-0 bg-[var(--color-surface-1)] border-r border-[var(--color-surface-3)] flex flex-col">
-      <div className="px-4 py-3 border-b border-[var(--color-surface-3)]">
-        <h2 className="text-xs font-medium text-[var(--color-text-tertiary)] uppercase tracking-wide">
+    <aside className="h-full w-60 min-[1440px]:w-60 lg:w-12 min-[1440px]:[&>*]:flex flex-shrink-0 bg-[var(--color-surface-1)] border-r border-[var(--color-surface-3)] flex flex-col">
+      <div className="px-4 py-3 border-b border-[var(--color-surface-3)] lg:px-2 min-[1440px]:px-4">
+        <h2 className="text-xs font-medium text-[var(--color-text-tertiary)] uppercase tracking-wide lg:hidden min-[1440px]:block">
           Projects
         </h2>
+        <span className="hidden lg:block min-[1440px]:hidden text-center text-xs text-[var(--color-text-tertiary)]">
+          ≡
+        </span>
       </div>
 
       <nav className="flex-1 overflow-y-auto py-2">
         {loading && (
-          <p className="px-4 py-2 text-xs text-[var(--color-text-tertiary)]">Loading...</p>
+          <p className="px-4 py-2 text-xs text-[var(--color-text-tertiary)] lg:hidden min-[1440px]:block">Loading...</p>
         )}
 
         {!loading && projects.map((project) => {
@@ -61,29 +64,32 @@ export function Sidebar() {
             <Link
               key={project.id}
               href={href}
-              className={`block px-4 py-2 text-sm ${
+              title={project.name}
+              className={`block text-sm px-4 py-2 lg:px-1 lg:py-2 lg:text-center min-[1440px]:px-4 min-[1440px]:text-left ${
                 isActive
                   ? 'bg-[var(--color-surface-2)] text-[var(--color-text-primary)] font-medium'
                   : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]'
               }`}
             >
-              <span className="text-xs text-[var(--color-text-tertiary)] mr-2">{project.key}</span>
-              {project.name}
+              <span className="text-xs text-[var(--color-text-tertiary)] mr-2 lg:mr-0 min-[1440px]:mr-2">{project.key.slice(0, 3)}</span>
+              <span className="lg:hidden min-[1440px]:inline">{project.name}</span>
             </Link>
           );
         })}
 
         {!loading && projects.length === 0 && (
-          <p className="px-4 py-2 text-xs text-[var(--color-text-tertiary)]">No projects yet</p>
+          <p className="px-4 py-2 text-xs text-[var(--color-text-tertiary)] lg:hidden min-[1440px]:block">No projects yet</p>
         )}
       </nav>
 
       <div className="border-t border-[var(--color-surface-3)] p-2">
         <Link
           href="/projects/new"
+          title="New Project"
           className="flex items-center justify-center gap-1 w-full py-2 text-sm rounded text-[var(--color-accent-blue)] hover:bg-[var(--color-surface-2)] transition-colors"
         >
-          + New Project
+          <span className="lg:hidden min-[1440px]:inline">+ New Project</span>
+          <span className="hidden lg:inline min-[1440px]:hidden" aria-hidden>+</span>
         </Link>
       </div>
     </aside>

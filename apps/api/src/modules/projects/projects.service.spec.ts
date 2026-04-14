@@ -177,25 +177,29 @@ describe('ProjectsService', () => {
     });
   });
 
-  describe('findByOwner', () => {
-    it('returns projects owned by the user', async () => {
+  describe('findAccessible', () => {
+    it('returns projects the user owns or is a member of', async () => {
       const mockProjects = [
         { id: 'p1', name: 'Project 1', key: 'P1', ownerId: 'user-1', createdAt: new Date() },
-        { id: 'p2', name: 'Project 2', key: 'P2', ownerId: 'user-1', createdAt: new Date() },
+        { id: 'p2', name: 'Project 2', key: 'P2', ownerId: 'someone-else', createdAt: new Date() },
       ];
       setupSelectChain(mockProjects);
 
-      const result = await service.findByOwner('user-1');
+      const result = await service.findAccessible('user-1');
 
       expect(result).toEqual(mockProjects);
       expect(mockDb.select).toHaveBeenCalled();
     });
 
-    it('returns empty array when user has no projects', async () => {
+    it('returns empty array when user has no accessible projects', async () => {
       setupSelectChain([]);
+      const result = await service.findAccessible('user-1');
+      expect(result).toEqual([]);
+    });
 
+    it('findByOwner is a backwards-compat alias for findAccessible', async () => {
+      setupSelectChain([]);
       const result = await service.findByOwner('user-1');
-
       expect(result).toEqual([]);
     });
   });
@@ -239,6 +243,105 @@ describe('ProjectsService', () => {
       });
 
       await expect(service.getStatuses('INVALID')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('updateMetadata', () => {
+    const existing = {
+      id: 'project-id',
+      name: 'Old Name',
+      key: 'MEGA',
+      description: 'Old description',
+      ownerId: 'user-1',
+      createdAt: new Date(),
+    };
+
+    function mockExistingLookup(found: typeof existing | null) {
+      mockDb.select.mockReturnValueOnce({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            limit: jest.fn().mockResolvedValue(found ? [found] : []),
+          }),
+        }),
+      });
+    }
+
+    function mockUpdateChain(returned: unknown) {
+      const chain = {
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        returning: jest.fn().mockResolvedValue([returned]),
+      };
+      (mockDb as unknown as { update: jest.Mock }).update = jest.fn().mockReturnValue(chain);
+      return chain;
+    }
+
+    it('updates name only and records audit row', async () => {
+      mockExistingLookup(existing);
+      const updated = { ...existing, name: 'New Name' };
+      const chain = mockUpdateChain(updated);
+      const auditLog = { record: jest.fn().mockResolvedValue(undefined) };
+      (service as unknown as { auditLog: typeof auditLog }).auditLog = auditLog;
+
+      const result = await service.updateMetadata('MEGA', { name: 'New Name' }, 'user-1');
+
+      expect(result).toEqual(updated);
+      expect(chain.set).toHaveBeenCalledWith({ name: 'New Name' });
+      expect(auditLog.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entityType: 'project',
+          action: 'updated',
+          before: { name: 'Old Name', description: 'Old description' },
+          after: { name: 'New Name', description: 'Old description' },
+        }),
+      );
+    });
+
+    it('updates description only', async () => {
+      mockExistingLookup(existing);
+      const updated = { ...existing, description: 'New desc' };
+      const chain = mockUpdateChain(updated);
+
+      const result = await service.updateMetadata('MEGA', { description: 'New desc' }, 'user-1');
+
+      expect(result.description).toBe('New desc');
+      expect(chain.set).toHaveBeenCalledWith({ description: 'New desc' });
+    });
+
+    it('clears description when null is passed', async () => {
+      mockExistingLookup(existing);
+      const updated = { ...existing, description: null };
+      const chain = mockUpdateChain(updated);
+
+      await service.updateMetadata('MEGA', { description: null }, 'user-1');
+
+      expect(chain.set).toHaveBeenCalledWith({ description: null });
+    });
+
+    it('throws NotFoundException for unknown project', async () => {
+      mockExistingLookup(null);
+
+      await expect(
+        service.updateMetadata('NOPE', { name: 'X' }, 'user-1'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws BadRequestException when both fields are absent', async () => {
+      await expect(
+        service.updateMetadata('MEGA', {} as never, 'user-1'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws BadRequestException when name exceeds 100 chars', async () => {
+      await expect(
+        service.updateMetadata('MEGA', { name: 'x'.repeat(101) }, 'user-1'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws BadRequestException when description exceeds 500 chars', async () => {
+      await expect(
+        service.updateMetadata('MEGA', { description: 'x'.repeat(501) }, 'user-1'),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

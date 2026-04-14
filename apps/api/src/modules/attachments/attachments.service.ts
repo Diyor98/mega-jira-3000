@@ -3,13 +3,14 @@ import {
   Inject,
   Logger,
   NotFoundException,
-  ForbiddenException,
   PayloadTooLargeException,
   UnsupportedMediaTypeException,
   StreamableFile,
   Optional,
 } from '@nestjs/common';
 import { AuditLogService } from '../audit/audit.service';
+import { RbacService } from '../rbac/rbac.service';
+import type { PermissionAction } from '../rbac/rbac.matrix';
 import { eq, and, desc, isNull, sql } from 'drizzle-orm';
 import { promises as fs, createReadStream, constants as fsConstants } from 'fs';
 import * as path from 'path';
@@ -103,14 +104,19 @@ export class AttachmentsService {
   constructor(
     @Inject(DATABASE_TOKEN) private readonly db: Database,
     @Optional() private readonly auditLog?: AuditLogService,
+    @Optional() private readonly rbac?: RbacService,
   ) {}
 
-  /** Owner-gate + issue-scoping helper. Returns the project + issue row. */
+  /** RBAC-gate + issue-scoping helper. Returns the project + issue row. */
   private async assertAccessAndLoadIssue(
     projectKey: string,
     issueId: string,
     userId: string,
+    action: PermissionAction,
   ) {
+    if (this.rbac) {
+      await this.rbac.assertAction(projectKey, userId, action);
+    }
     const [project] = await this.db
       .select({ id: projects.id, key: projects.key, ownerId: projects.ownerId })
       .from(projects)
@@ -119,9 +125,6 @@ export class AttachmentsService {
 
     if (!project) {
       throw new NotFoundException(`Project '${projectKey}' not found`);
-    }
-    if (project.ownerId !== userId) {
-      throw new ForbiddenException('You do not have access to this project');
     }
 
     const [issue] = await this.db
@@ -174,6 +177,7 @@ export class AttachmentsService {
       projectKey,
       issueId,
       userId,
+      'attachment.upload',
     );
 
     // Sanitize the client-supplied filename at ingress — strips CR/LF/NUL/
@@ -257,7 +261,12 @@ export class AttachmentsService {
   }
 
   async listByIssue(projectKey: string, issueId: string, userId: string) {
-    const { issue } = await this.assertAccessAndLoadIssue(projectKey, issueId, userId);
+    const { issue } = await this.assertAccessAndLoadIssue(
+      projectKey,
+      issueId,
+      userId,
+      'project.read',
+    );
 
     // LEFT JOIN + coalesce — attachments uploaded by a deleted user should
     // still appear in the list, labeled `[deleted user]`. An INNER JOIN
@@ -289,6 +298,7 @@ export class AttachmentsService {
       projectKey,
       issueId,
       userId,
+      'project.read',
     );
 
     const [row] = await this.db
@@ -342,6 +352,7 @@ export class AttachmentsService {
       projectKey,
       issueId,
       userId,
+      'attachment.delete',
     );
 
     const [row] = await this.db

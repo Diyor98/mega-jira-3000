@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 
 type ToastType = 'success' | 'error';
 
@@ -50,6 +51,8 @@ const SUCCESS_AUTO_DISMISS_MS = 3000;
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastRecord[]>([]);
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const router = useRouter();
+  const pathname = usePathname();
 
   const dismiss = useCallback((id: string) => {
     const timer = timersRef.current.get(id);
@@ -82,6 +85,31 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       timers.clear();
     };
   }, []);
+
+  // Story 8.2: global 403 listener. Shows a toast and redirects to project
+  // home (or "/" if not in a project context). Local catchers still run —
+  // accept the rare double-toast.
+  useEffect(() => {
+    const onForbidden = (evt: Event) => {
+      const detail = (evt as CustomEvent).detail as {
+        message?: string;
+        action?: string;
+      } | undefined;
+      const message =
+        detail?.message ??
+        (detail?.action
+          ? `You don't have permission for "${detail.action}"`
+          : 'You do not have permission to perform that action');
+      push('error', message);
+      // Redirect to project home if we're in a project route, else "/".
+      const match = pathname?.match(/^\/projects\/([^/]+)/);
+      const target = match ? `/projects/${match[1]}` : '/';
+      if (pathname !== target) router.replace(target);
+    };
+    window.addEventListener('mega:forbidden', onForbidden as EventListener);
+    return () =>
+      window.removeEventListener('mega:forbidden', onForbidden as EventListener);
+  }, [pathname, router, push]);
 
   const success = useCallback(
     (m: string, options?: ToastOptions) => push('success', m, options),

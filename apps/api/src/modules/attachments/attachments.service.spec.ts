@@ -6,6 +6,7 @@ import {
   StreamableFile,
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
+import { createRbacDenyMock } from '../../test-utils/rbac-mock';
 
 // Mock node:fs — must happen BEFORE importing the service.
 jest.mock('fs', () => ({
@@ -156,9 +157,13 @@ describe('AttachmentsService', () => {
       expect(fs.unlink).toHaveBeenCalled();
     });
 
-    it('throws ForbiddenException for non-owner of project', async () => {
-      const db = makeDb([[otherProject]]);
-      service = new AttachmentsService(db);
+    it('RBAC: denies via assertAction', async () => {
+      const db = makeDb([]);
+      service = new AttachmentsService(
+        db,
+        undefined,
+        createRbacDenyMock('attachment.upload') as any,
+      );
       await expect(
         service.create('MJ', 'issue-1', userId, smallPng()),
       ).rejects.toThrow(ForbiddenException);
@@ -204,9 +209,13 @@ describe('AttachmentsService', () => {
       expect(result).toEqual(attachmentsRows);
     });
 
-    it('throws ForbiddenException for non-owner', async () => {
-      const db = makeDb([[otherProject]]);
-      service = new AttachmentsService(db);
+    it('RBAC: denies via assertAction', async () => {
+      const db = makeDb([]);
+      service = new AttachmentsService(
+        db,
+        undefined,
+        createRbacDenyMock('project.read') as any,
+      );
       await expect(
         service.listByIssue('MJ', 'issue-1', userId),
       ).rejects.toThrow(ForbiddenException);
@@ -339,9 +348,13 @@ describe('AttachmentsService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('throws ForbiddenException for non-owner of project', async () => {
-      const db = makeDb([[otherProject]]);
-      service = new AttachmentsService(db);
+    it('RBAC: denies via assertAction', async () => {
+      const db = makeDb([]);
+      service = new AttachmentsService(
+        db,
+        undefined,
+        createRbacDenyMock('attachment.delete') as any,
+      );
       await expect(
         service.delete('MJ', 'issue-1', 'att-1', userId),
       ).rejects.toThrow(ForbiddenException);

@@ -4,11 +4,12 @@ import {
   Logger,
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
 import { AuditLogService } from '../audit/audit.service';
+import { RbacService } from '../rbac/rbac.service';
+import type { PermissionAction } from '../rbac/rbac.matrix';
 import { eq, and, asc } from 'drizzle-orm';
 import { DATABASE_TOKEN } from '../../database/database.module';
 import type { Database } from '../../database/db';
@@ -26,14 +27,18 @@ export class FilterPresetsService {
   constructor(
     @Inject(DATABASE_TOKEN) private readonly db: Database,
     @Optional() private readonly auditLog?: AuditLogService,
+    @Optional() private readonly rbac?: RbacService,
   ) {}
 
-  /**
-   * Today: project access === project ownership. When Epic 8 RBAC lands this
-   * becomes a membership check. Duplicated from WorkflowService.assertOwnerAndLoadContext
-   * by design — see story 5.2 dev notes.
-   */
-  private async assertProjectAccess(projectKey: string, userId: string) {
+  /** Project access — gated via RbacService (story 8.2). */
+  private async assertProjectAccess(
+    projectKey: string,
+    userId: string,
+    action: PermissionAction = 'filter.read',
+  ) {
+    if (this.rbac) {
+      await this.rbac.assertAction(projectKey, userId, action);
+    }
     const [project] = await this.db
       .select({ id: projects.id, key: projects.key, ownerId: projects.ownerId })
       .from(projects)
@@ -42,9 +47,6 @@ export class FilterPresetsService {
 
     if (!project) {
       throw new NotFoundException(`Project '${projectKey}' not found`);
-    }
-    if (project.ownerId !== userId) {
-      throw new ForbiddenException('You do not have access to this project');
     }
     return project;
   }
@@ -58,7 +60,7 @@ export class FilterPresetsService {
     }
     const { name, filterConfig } = parsed.data;
 
-    const project = await this.assertProjectAccess(projectKey, userId);
+    const project = await this.assertProjectAccess(projectKey, userId, 'filter.write');
 
     let created;
     try {
@@ -123,7 +125,7 @@ export class FilterPresetsService {
   }
 
   async delete(projectKey: string, userId: string, presetId: string) {
-    const project = await this.assertProjectAccess(projectKey, userId);
+    const project = await this.assertProjectAccess(projectKey, userId, 'filter.write');
 
     // Scope by (id, user_id) so another user's preset returns 404, not 403 —
     // avoids leaking existence (see story 5.2 dev notes).

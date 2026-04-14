@@ -7,6 +7,7 @@ import { ConflictNotification } from './conflict-notification';
 import { CommentThread } from './comment-thread';
 import { AttachmentList } from './attachment-list';
 import { useToast } from './toast';
+import { useProjectPermissions } from '../lib/use-project-permissions';
 
 interface IssueDetail {
   id: string;
@@ -72,6 +73,12 @@ interface IssueDetailPanelProps {
 
 export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted, users = [] }: IssueDetailPanelProps) {
   const toast = useToast();
+  const { can: canPerm } = useProjectPermissions(projectKey);
+  const canEdit = canPerm('issue.edit');
+  const canDelete = canPerm('issue.delete');
+  const canComment = canPerm('comment.create');
+  const canUpload = canPerm('attachment.upload');
+  const canDeleteAttachment = canPerm('attachment.delete');
   const [issue, setIssue] = useState<IssueDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -184,6 +191,7 @@ export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted, user
   }
 
   function startEdit(field: string, currentValue: string) {
+    if (!canEdit) return;
     setEditingField(field);
     setEditDraft(currentValue);
     setSaveError(null);
@@ -591,21 +599,31 @@ export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted, user
               Cancel
             </button>
           </div>
-        ) : (
+        ) : canDelete ? (
           <button
             onClick={() => setConfirmDelete(true)}
             className="text-xs text-[var(--color-status-red)] hover:underline"
           >
             Delete
           </button>
-        )}
+        ) : null}
       </div>
 
       {/* Attachments (Story 7.1) */}
-      <AttachmentList projectKey={projectKey} issueId={issue.id} />
+      <AttachmentList
+        projectKey={projectKey}
+        issueId={issue.id}
+        canUpload={canUpload}
+        canDelete={canDeleteAttachment}
+      />
 
       {/* Comments thread (Story 6.1) */}
-      <CommentThread projectKey={projectKey} issueId={issue.id} users={users} />
+      <CommentThread
+        projectKey={projectKey}
+        issueId={issue.id}
+        users={users}
+        canComment={canComment}
+      />
     </div>
   );
 }

@@ -34,7 +34,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     // Only these top-level fields on an HttpException response body are
     // forwarded to the client. Any other fields (message[] arrays from
     // ValidationPipe, internal IDs, stack traces, etc.) are dropped.
-    const FORWARDABLE_FIELDS = new Set(['rule']);
+    const FORWARDABLE_FIELDS = new Set(['rule', 'action']);
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();

@@ -32,7 +32,7 @@
 # - Dependency chain: Epic 1 → Epic 2 → Epic 3 → Epic 4. Epics 5-9 parallel after Epic 3.
 
 generated: 2026-04-09
-last_updated: 2026-04-14 # story 8.1 done
+last_updated: 2026-04-14 # story 9.1 review
 project: Mega Jira 3000
 project_key: MEGA
 tracking_system: file-system
@@ -94,16 +94,16 @@ development_status:
   epic-7-retrospective: optional
 
   # === EPIC 8: RBAC & Project Administration ===
-  epic-8: in-progress
+  epic-8: done
   8-1-project-level-role-assignment: done
-  8-2-permission-enforcement: backlog
-  8-3-project-settings-and-audit-trail: backlog
-  8-4-responsive-layout-breakpoints: backlog
+  8-2-permission-enforcement: done
+  8-3-project-settings-and-audit-trail: done
+  8-4-responsive-layout-breakpoints: done
   epic-8-retrospective: optional
 
   # === EPIC 9: Power User Experience ===
-  epic-9: backlog
-  9-1-command-palette: backlog
+  epic-9: in-progress
+  9-1-command-palette: review
   9-2-keyboard-shortcuts: backlog
   9-3-list-view: backlog
   9-4-ci-cd-pipeline-setup: backlog

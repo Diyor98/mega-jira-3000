@@ -8,7 +8,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { AuditLogService } from '../audit/audit.service';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, or, sql } from 'drizzle-orm';
 import { DEFAULT_WORKFLOW_STATUSES } from '@mega-jira/shared';
 import { DATABASE_TOKEN } from '../../database/database.module';
 import type { Database } from '../../database/db';
@@ -17,6 +17,7 @@ import { workflows } from '../../database/schema/workflows';
 import { workflowStatuses } from '../../database/schema/workflow-statuses';
 import { projectMembers } from '../../database/schema/project-members';
 import { createProjectSchema, type CreateProjectDto } from './dto/create-project.dto';
+import { updateProjectSchema, type UpdateProjectDto } from './dto/update-project.dto';
 
 const PG_UNIQUE_VIOLATION = '23505';
 
@@ -106,17 +107,91 @@ export class ProjectsService {
     return project;
   }
 
-  async findByOwner(userId: string) {
+  /**
+   * Story 8.2: returns every project the caller can access — owner OR a row
+   * in `project_members`. The owner clause stays for the transitional safety
+   * net (Story 8.1 backfilled member rows for every owner; the OR keeps a
+   * legacy owner with a missing member row from being locked out).
+   */
+  async findAccessible(userId: string) {
     return this.db
       .select({
         id: projects.id,
         name: projects.name,
         key: projects.key,
+        description: projects.description,
         ownerId: projects.ownerId,
         createdAt: projects.createdAt,
       })
       .from(projects)
-      .where(eq(projects.ownerId, userId));
+      .where(
+        or(
+          eq(projects.ownerId, userId),
+          sql`EXISTS (SELECT 1 FROM ${projectMembers} WHERE ${projectMembers.projectId} = ${projects.id} AND ${projectMembers.userId} = ${userId})`,
+        ),
+      );
+  }
+
+  /** @deprecated use `findAccessible` (Story 8.2 replaced ownership-only listing). */
+  async findByOwner(userId: string) {
+    return this.findAccessible(userId);
+  }
+
+  async updateMetadata(projectKey: string, dto: UpdateProjectDto, userId: string) {
+    const validation = updateProjectSchema.safeParse(dto);
+    if (!validation.success) {
+      const message = validation.error.issues.map((i: { message: string }) => i.message).join(', ');
+      throw new BadRequestException(message);
+    }
+    const patch = validation.data;
+
+    const [existing] = await this.db
+      .select({
+        id: projects.id,
+        name: projects.name,
+        key: projects.key,
+        description: projects.description,
+        ownerId: projects.ownerId,
+        createdAt: projects.createdAt,
+      })
+      .from(projects)
+      .where(eq(projects.key, projectKey))
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundException(`Project '${projectKey}' not found`);
+    }
+
+    const update: { name?: string; description?: string | null } = {};
+    if (patch.name !== undefined) update.name = patch.name.trim();
+    if (patch.description !== undefined) update.description = patch.description;
+
+    const [updated] = await this.db
+      .update(projects)
+      .set(update)
+      .where(eq(projects.id, existing.id))
+      .returning({
+        id: projects.id,
+        name: projects.name,
+        key: projects.key,
+        description: projects.description,
+        ownerId: projects.ownerId,
+        createdAt: projects.createdAt,
+      });
+
+    this.logger.log(`[AUDIT] project.updated | userId=${userId} | projectKey=${projectKey}`);
+
+    await this.auditLog?.record({
+      projectId: existing.id,
+      actorId: userId,
+      entityType: 'project',
+      entityId: existing.id,
+      action: 'updated',
+      before: { name: existing.name, description: existing.description },
+      after: { name: updated.name, description: updated.description },
+    });
+
+    return updated;
   }
 
   async getStatuses(projectKey: string) {

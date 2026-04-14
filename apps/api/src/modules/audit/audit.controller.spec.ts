@@ -1,5 +1,6 @@
 import { NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { AuditController } from './audit.controller';
+import { createRbacDenyMock } from '../../test-utils/rbac-mock';
 
 function makeReq(userId: string) {
   return { user: { userId } } as unknown as any;
@@ -47,9 +48,10 @@ describe('AuditController', () => {
     );
   });
 
-  it('403 when non-owner', async () => {
+  it('RBAC: denies via assertAction', async () => {
     const ctrl = new AuditController(
       buildDb({ id: 'p1', ownerId: 'other' }),
+      createRbacDenyMock('audit.view') as any,
     );
     await expect(ctrl.list('MEGA', undefined, undefined, makeReq('u1'))).rejects.toThrow(
       ForbiddenException,

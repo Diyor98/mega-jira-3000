@@ -4,11 +4,12 @@ import {
   Logger,
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
 import { AuditLogService } from '../audit/audit.service';
+import { RbacService } from '../rbac/rbac.service';
+import type { PermissionAction } from '../rbac/rbac.matrix';
 import { eq, and, isNull, inArray, sql } from 'drizzle-orm';
 import { DATABASE_TOKEN } from '../../database/database.module';
 import type { Database } from '../../database/db';
@@ -29,12 +30,20 @@ export class WorkflowService {
   constructor(
     @Inject(DATABASE_TOKEN) private readonly db: Database,
     @Optional() private readonly auditLog?: AuditLogService,
+    @Optional() private readonly rbac?: RbacService,
   ) {}
 
   // -------------- helpers --------------
 
-  /** Throws ForbiddenException if the caller does not own the project. Returns the project + default workflow. */
-  private async assertOwnerAndLoadContext(projectKey: string, userId: string) {
+  /** Loads project + default workflow via the RBAC gate. */
+  private async assertOwnerAndLoadContext(
+    projectKey: string,
+    userId: string,
+    action: PermissionAction = 'workflow.edit',
+  ) {
+    if (this.rbac) {
+      await this.rbac.assertAction(projectKey, userId, action);
+    }
     const [project] = await this.db
       .select({ id: projects.id, key: projects.key, ownerId: projects.ownerId })
       .from(projects)
@@ -43,9 +52,6 @@ export class WorkflowService {
 
     if (!project) {
       throw new NotFoundException(`Project '${projectKey}' not found`);
-    }
-    if (project.ownerId !== userId) {
-      throw new ForbiddenException('Only the project owner can modify workflow statuses');
     }
 
     const [workflow] = await this.db

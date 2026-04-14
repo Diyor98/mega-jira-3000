@@ -2,10 +2,11 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/a
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string | string[] | undefined | null>;
+  suppressForbiddenEvent?: boolean;
 }
 
 async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-  const { params, ...fetchOptions } = options;
+  const { params, suppressForbiddenEvent, ...fetchOptions } = options;
 
   let url = `${API_BASE_URL}${endpoint}`;
   if (params) {
@@ -39,12 +40,26 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
       message: 'An unexpected error occurred',
       code: response.status,
     }));
+    if (response.status === 403 && !suppressForbiddenEvent) {
+      emitForbidden(error);
+    }
     throw error;
   }
 
   const json = await response.json().catch(() => ({ data: null }));
   // Unwrap { data: T } envelope from API
   return json?.data !== undefined ? json.data : json;
+}
+
+/**
+ * Story 8.2: dispatch a window-level `mega:forbidden` event when the API
+ * returns 403. The app shell listens and shows a toast + redirects to the
+ * project home. Safe in SSR (the typeof check guards against `window`).
+ */
+export function emitForbidden(error: unknown): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('mega:forbidden', { detail: error }));
+  }
 }
 
 export const apiClient = {
@@ -89,6 +104,7 @@ export const apiClient = {
         message: 'An unexpected error occurred',
         code: response.status,
       }));
+      if (response.status === 403) emitForbidden(error);
       throw error;
     }
     const json = await response.json().catch(() => ({ data: null }));

@@ -165,7 +165,7 @@ export function FilterBar({
   return (
     <div
       ref={rootRef}
-      className="mb-3 flex flex-wrap items-center gap-2 p-2 rounded border border-[var(--color-surface-3)] bg-[var(--color-surface-1)]"
+      className="mb-3 flex flex-nowrap lg:flex-wrap overflow-x-auto lg:overflow-visible items-center gap-2 p-2 rounded border border-[var(--color-surface-3)] bg-[var(--color-surface-1)]"
     >
       {/* Presets chip (Story 5.2) */}
       {presetsEnabled && (

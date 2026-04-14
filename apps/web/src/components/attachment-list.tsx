@@ -19,6 +19,8 @@ interface Attachment {
 interface AttachmentListProps {
   projectKey: string;
   issueId: string;
+  canUpload?: boolean;
+  canDelete?: boolean;
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
@@ -46,7 +48,7 @@ function iconFor(mime: string): string {
   return '📎';
 }
 
-export function AttachmentList({ projectKey, issueId }: AttachmentListProps) {
+export function AttachmentList({ projectKey, issueId, canUpload = true, canDelete = true }: AttachmentListProps) {
   const toast = useToast();
   const [rows, setRows] = useState<Attachment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -170,49 +172,53 @@ export function AttachmentList({ projectKey, issueId }: AttachmentListProps) {
                   <span>{relativeTime(a.createdAt)}</span>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => handleDelete(a)}
-                aria-label={`Delete ${a.fileName}`}
-                className="text-xs px-2 py-0.5 text-[var(--color-status-red)] hover:bg-[#FEE2E2] rounded"
-              >
-                Delete
-              </button>
+              {canDelete && (
+                <button
+                  type="button"
+                  onClick={() => handleDelete(a)}
+                  aria-label={`Delete ${a.fileName}`}
+                  className="text-xs px-2 py-0.5 text-[var(--color-status-red)] hover:bg-[#FEE2E2] rounded"
+                >
+                  Delete
+                </button>
+              )}
             </li>
           ))}
         </ul>
       )}
 
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={onDrop}
-        className={`flex items-center justify-between gap-2 p-2 rounded border-2 border-dashed text-xs transition-colors ${
-          dragOver
-            ? 'border-[var(--color-accent-blue)] bg-[var(--color-accent-blue)]/5'
-            : 'border-[var(--color-surface-3)] text-[var(--color-text-tertiary)]'
-        }`}
-      >
-        <span>{uploading ? 'Uploading…' : 'Drop a file here, or'}</span>
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          className="text-xs px-2 py-1 rounded bg-[var(--color-accent-blue)] text-white hover:bg-[var(--color-accent-blue-dark)] disabled:opacity-50"
+      {canUpload && (
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+          className={`flex items-center justify-between gap-2 p-2 rounded border-2 border-dashed text-xs transition-colors ${
+            dragOver
+              ? 'border-[var(--color-accent-blue)] bg-[var(--color-accent-blue)]/5'
+              : 'border-[var(--color-surface-3)] text-[var(--color-text-tertiary)]'
+          }`}
         >
-          Attach File
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={ACCEPT_ATTR}
-          onChange={onFileChange}
-          className="hidden"
-        />
-      </div>
+          <span>{uploading ? 'Uploading…' : 'Drop a file here, or'}</span>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="text-xs px-2 py-1 rounded bg-[var(--color-accent-blue)] text-white hover:bg-[var(--color-accent-blue-dark)] disabled:opacity-50"
+          >
+            Attach File
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ACCEPT_ATTR}
+            onChange={onFileChange}
+            className="hidden"
+          />
+        </div>
+      )}
     </div>
   );
 }

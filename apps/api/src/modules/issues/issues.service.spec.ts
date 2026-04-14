@@ -1871,4 +1871,63 @@ describe('IssuesService', () => {
       );
     });
   });
+
+  describe('RBAC enforcement (Story 8.2)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { ForbiddenException } = require('@nestjs/common');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createRbacDenyMock } = require('../../test-utils/rbac-mock');
+
+    function gatedService(action: string) {
+      return new IssuesService(
+        mockDb as never,
+        mockEventService as never,
+        mockNotificationsService as never,
+        undefined,
+        createRbacDenyMock(action) as never,
+      );
+    }
+
+    it('create → denies via assertAction', async () => {
+      const gated = gatedService('issue.create');
+      await expect(gated.create(validDto, userId, 'MEGA')).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('update → denies via assertAction', async () => {
+      const gated = gatedService('issue.edit');
+      await expect(
+        gated.update('MEGA', 'i1', { title: 'x', issueVersion: 1 } as never, userId),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('softDelete → denies via assertAction', async () => {
+      const gated = gatedService('issue.delete');
+      await expect(
+        gated.softDelete('MEGA', 'i1', 1, userId),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('restore → denies via assertAction', async () => {
+      const gated = gatedService('issue.delete');
+      await expect(gated.restore('MEGA', 'i1', userId)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('createLink → denies via assertAction', async () => {
+      const gated = gatedService('issue.edit');
+      await expect(
+        gated.createLink('MEGA', 'i1', { targetIssueId: 'i2', linkType: 'related' } as never, userId),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('createBugFromStory → denies via assertAction', async () => {
+      const gated = gatedService('issue.create');
+      await expect(
+        gated.createBugFromStory('MEGA', 'i1', { title: 'x' }, userId),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
 });

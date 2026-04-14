@@ -36,7 +36,7 @@ export function SlideOverPanel({ isOpen, onClose, children }: SlideOverPanelProp
       />
       {/* Panel */}
       <div
-        className={`absolute right-0 top-0 h-full w-[480px] bg-[var(--color-surface-0)] border-l border-[var(--color-surface-3)] overflow-y-auto transform transition-transform duration-200 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`absolute right-0 top-0 h-full w-full lg:w-[400px] min-[1440px]:w-[480px] bg-[var(--color-surface-0)] border-l border-[var(--color-surface-3)] overflow-y-auto transform transition-transform duration-200 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
         role="dialog"
         aria-modal="true"
       >

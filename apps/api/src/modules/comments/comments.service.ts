@@ -3,7 +3,6 @@ import {
   Inject,
   Logger,
   BadRequestException,
-  ForbiddenException,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
@@ -19,6 +18,8 @@ import { createCommentSchema, type CreateCommentInput } from '@mega-jira/shared'
 import { EventService } from '../board/event.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditLogService } from '../audit/audit.service';
+import { RbacService } from '../rbac/rbac.service';
+import type { PermissionAction } from '../rbac/rbac.matrix';
 
 /**
  * Parses `@handle` mentions out of a Markdown comment body. Returns unique,
@@ -49,18 +50,23 @@ export class CommentsService {
     private readonly eventService: EventService,
     private readonly notificationsService: NotificationsService,
     @Optional() private readonly auditLog?: AuditLogService,
+    @Optional() private readonly rbac?: RbacService,
   ) {}
 
   /**
-   * Owner-gate + issue-scoping helper. Returns the project + resolved issue
+   * RBAC-gate + issue-scoping helper. Returns the project + resolved issue
    * key (for audit logging). Throws 404 if the issue is not in this project
-   * or is soft-deleted, 403 if the caller does not own the project.
+   * or is soft-deleted, 403 via RbacService if the caller is not allowed.
    */
   private async assertAccessAndLoadIssue(
     projectKey: string,
     issueId: string,
     userId: string,
+    action: PermissionAction,
   ) {
+    if (this.rbac) {
+      await this.rbac.assertAction(projectKey, userId, action);
+    }
     const [project] = await this.db
       .select({ id: projects.id, key: projects.key, ownerId: projects.ownerId })
       .from(projects)
@@ -69,9 +75,6 @@ export class CommentsService {
 
     if (!project) {
       throw new NotFoundException(`Project '${projectKey}' not found`);
-    }
-    if (project.ownerId !== userId) {
-      throw new ForbiddenException('You do not have access to this project');
     }
 
     const [issue] = await this.db
@@ -111,6 +114,7 @@ export class CommentsService {
       projectKey,
       issueId,
       userId,
+      'comment.create',
     );
 
     const handles = extractMentions(body);
@@ -202,7 +206,12 @@ export class CommentsService {
   }
 
   async listByIssue(projectKey: string, issueId: string, userId: string) {
-    const { issue } = await this.assertAccessAndLoadIssue(projectKey, issueId, userId);
+    const { issue } = await this.assertAccessAndLoadIssue(
+      projectKey,
+      issueId,
+      userId,
+      'project.read',
+    );
 
     const rows = await this.db
       .select({

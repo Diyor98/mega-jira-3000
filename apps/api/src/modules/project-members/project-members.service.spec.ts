@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ProjectMembersService } from './project-members.service';
+import { createRbacMock, createRbacDenyMock } from '../../test-utils/rbac-mock';
 
 describe('ProjectMembersService', () => {
   let service: ProjectMembersService;
@@ -13,18 +14,21 @@ describe('ProjectMembersService', () => {
 
   const ownerProject = { id: 'p1', key: 'MEGA', ownerId: 'owner-1' };
 
-  function setupGate(
-    project: unknown | null,
-    membership: { role: string } | null = null,
-  ) {
-    let call = 0;
+  /** Project select + an optional follow-up select for the second call. */
+  function queueSelects(...batches: unknown[][]) {
+    let i = 0;
     mockDb.select = jest.fn().mockImplementation(() => {
-      call++;
-      const data = call === 1 ? (project ? [project] : []) : membership ? [membership] : [];
+      const data = batches[i] ?? [];
+      i++;
       return {
         from: jest.fn().mockReturnValue({
           where: jest.fn().mockReturnValue({
             limit: jest.fn().mockResolvedValue(data),
+          }),
+          leftJoin: jest.fn().mockReturnValue({
+            where: jest.fn().mockReturnValue({
+              orderBy: jest.fn().mockResolvedValue(data),
+            }),
           }),
         }),
       };
@@ -39,148 +43,37 @@ describe('ProjectMembersService', () => {
       update: jest.fn(),
       delete: jest.fn(),
     };
-    service = new ProjectMembersService(mockDb, { record: auditSpy } as any);
+    service = new ProjectMembersService(
+      mockDb,
+      { record: auditSpy } as any,
+      createRbacMock('project_admin') as any,
+    );
   });
 
-  describe('assertCanManageMembers (via listByProject)', () => {
+  describe('listByProject', () => {
     it('404 on unknown project', async () => {
-      setupGate(null);
+      queueSelects([]);
       await expect(service.listByProject('NOPE', 'u1')).rejects.toThrow(NotFoundException);
     });
 
-    it('allows legacy owner without membership row', async () => {
-      setupGate(ownerProject);
-      // leftJoin chain for listByProject final query:
-      mockDb.select = jest
-        .fn()
-        // gate call #1: project
-        .mockReturnValueOnce({
-          from: jest.fn().mockReturnValue({
-            where: jest.fn().mockReturnValue({
-              limit: jest.fn().mockResolvedValue([ownerProject]),
-            }),
-          }),
-        })
-        // listByProject result query:
-        .mockReturnValueOnce({
-          from: jest.fn().mockReturnValue({
-            leftJoin: jest.fn().mockReturnValue({
-              where: jest.fn().mockReturnValue({
-                orderBy: jest.fn().mockResolvedValue([
-                  { userId: 'owner-1', email: 'owner@test', role: 'project_admin', addedAt: new Date(), addedBy: 'owner-1' },
-                ]),
-              }),
-            }),
-          }),
-        });
+    it('returns rows for an admin caller', async () => {
+      queueSelects(
+        [ownerProject],
+        [{ userId: 'owner-1', email: 'owner@test', role: 'project_admin', addedAt: new Date(), addedBy: 'owner-1' }],
+      );
       const rows = await service.listByProject('MEGA', 'owner-1');
       expect(rows).toHaveLength(1);
     });
 
-    it('403 for non-member non-owner', async () => {
-      setupGate(ownerProject, null);
+    it('RBAC: denies when caller has no project access', async () => {
+      service = new ProjectMembersService(
+        mockDb,
+        { record: auditSpy } as any,
+        createRbacDenyMock('project.read') as any,
+      );
       await expect(service.listByProject('MEGA', 'intruder')).rejects.toThrow(
         ForbiddenException,
       );
-    });
-
-    it('allows member with role=viewer (read-only access)', async () => {
-      // Story 8.1 M1 patch: listByProject uses assertProjectAccess, which
-      // allows any member regardless of role. Write methods still gate
-      // via assertCanManageMembers.
-      let call = 0;
-      mockDb.select = jest.fn().mockImplementation(() => {
-        call++;
-        if (call === 1) {
-          return {
-            from: jest.fn().mockReturnValue({
-              where: jest.fn().mockReturnValue({
-                limit: jest.fn().mockResolvedValue([ownerProject]),
-              }),
-            }),
-          };
-        }
-        if (call === 2) {
-          return {
-            from: jest.fn().mockReturnValue({
-              where: jest.fn().mockReturnValue({
-                limit: jest.fn().mockResolvedValue([{ role: 'viewer' }]),
-              }),
-            }),
-          };
-        }
-        return {
-          from: jest.fn().mockReturnValue({
-            leftJoin: jest.fn().mockReturnValue({
-              where: jest.fn().mockReturnValue({
-                orderBy: jest.fn().mockResolvedValue([]),
-              }),
-            }),
-          }),
-        };
-      });
-      await expect(service.listByProject('MEGA', 'u2')).resolves.toEqual([]);
-    });
-
-    it('403 on updateRole when caller is a non-admin member', async () => {
-      let call = 0;
-      mockDb.select = jest.fn().mockImplementation(() => {
-        call++;
-        if (call === 1) {
-          return {
-            from: jest.fn().mockReturnValue({
-              where: jest.fn().mockReturnValue({
-                limit: jest.fn().mockResolvedValue([ownerProject]),
-              }),
-            }),
-          };
-        }
-        return {
-          from: jest.fn().mockReturnValue({
-            where: jest.fn().mockReturnValue({
-              limit: jest.fn().mockResolvedValue([{ role: 'developer' }]),
-            }),
-          }),
-        };
-      });
-      await expect(
-        service.updateRole('MEGA', 'u2', 'u3', 'qa'),
-      ).rejects.toThrow(ForbiddenException);
-    });
-
-    it('allows system_admin member', async () => {
-      let call = 0;
-      mockDb.select = jest.fn().mockImplementation(() => {
-        call++;
-        if (call === 1) {
-          return {
-            from: jest.fn().mockReturnValue({
-              where: jest.fn().mockReturnValue({
-                limit: jest.fn().mockResolvedValue([ownerProject]),
-              }),
-            }),
-          };
-        }
-        if (call === 2) {
-          return {
-            from: jest.fn().mockReturnValue({
-              where: jest.fn().mockReturnValue({
-                limit: jest.fn().mockResolvedValue([{ role: 'system_admin' }]),
-              }),
-            }),
-          };
-        }
-        return {
-          from: jest.fn().mockReturnValue({
-            leftJoin: jest.fn().mockReturnValue({
-              where: jest.fn().mockReturnValue({
-                orderBy: jest.fn().mockResolvedValue([]),
-              }),
-            }),
-          }),
-        };
-      });
-      await expect(service.listByProject('MEGA', 'u2')).resolves.toEqual([]);
     });
   });
 
@@ -194,20 +87,11 @@ describe('ProjectMembersService', () => {
       let call = 0;
       mockDb.select = jest.fn().mockImplementation(() => {
         call++;
-        if (call === 1) {
-          return {
-            from: jest.fn().mockReturnValue({
-              where: jest.fn().mockReturnValue({
-                limit: jest.fn().mockResolvedValue([project]),
-              }),
-            }),
-          };
-        }
-        // target user lookup (owner passes gate → skips membership call)
+        const data = call === 1 ? [project] : targetUser ? [targetUser] : [];
         return {
           from: jest.fn().mockReturnValue({
             where: jest.fn().mockReturnValue({
-              limit: jest.fn().mockResolvedValue(targetUser ? [targetUser] : []),
+              limit: jest.fn().mockResolvedValue(data),
             }),
           }),
         };
@@ -255,6 +139,17 @@ describe('ProjectMembersService', () => {
         service.addMember('MEGA', 'owner-1', { email: 'alice@test', role: 'pm' }),
       ).rejects.toThrow(ConflictException);
     });
+
+    it('RBAC: denies via assertAction', async () => {
+      service = new ProjectMembersService(
+        mockDb,
+        { record: auditSpy } as any,
+        createRbacDenyMock('member.manage') as any,
+      );
+      await expect(
+        service.addMember('MEGA', 'u2', { email: 'alice@test', role: 'pm' }),
+      ).rejects.toThrow(ForbiddenException);
+    });
   });
 
   describe('updateRole', () => {
@@ -266,19 +161,11 @@ describe('ProjectMembersService', () => {
       let call = 0;
       mockDb.select = jest.fn().mockImplementation(() => {
         call++;
-        if (call === 1) {
-          return {
-            from: jest.fn().mockReturnValue({
-              where: jest.fn().mockReturnValue({
-                limit: jest.fn().mockResolvedValue([project]),
-              }),
-            }),
-          };
-        }
+        const data = call === 1 ? [project] : existing ? [existing] : [];
         return {
           from: jest.fn().mockReturnValue({
             where: jest.fn().mockReturnValue({
-              limit: jest.fn().mockResolvedValue(existing ? [existing] : []),
+              limit: jest.fn().mockResolvedValue(data),
             }),
           }),
         };
@@ -319,6 +206,17 @@ describe('ProjectMembersService', () => {
         }),
       );
     });
+
+    it('RBAC: denies via assertAction', async () => {
+      service = new ProjectMembersService(
+        mockDb,
+        { record: auditSpy } as any,
+        createRbacDenyMock('member.manage') as any,
+      );
+      await expect(
+        service.updateRole('MEGA', 'u2', 'u3', 'qa'),
+      ).rejects.toThrow(ForbiddenException);
+    });
   });
 
   describe('removeMember', () => {
@@ -329,19 +227,11 @@ describe('ProjectMembersService', () => {
       let call = 0;
       mockDb.select = jest.fn().mockImplementation(() => {
         call++;
-        if (call === 1) {
-          return {
-            from: jest.fn().mockReturnValue({
-              where: jest.fn().mockReturnValue({
-                limit: jest.fn().mockResolvedValue([project]),
-              }),
-            }),
-          };
-        }
+        const data = call === 1 ? [project] : existing ? [existing] : [];
         return {
           from: jest.fn().mockReturnValue({
             where: jest.fn().mockReturnValue({
-              limit: jest.fn().mockResolvedValue(existing ? [existing] : []),
+              limit: jest.fn().mockResolvedValue(data),
             }),
           }),
         };
@@ -376,6 +266,17 @@ describe('ProjectMembersService', () => {
           before: { role: 'qa' },
         }),
       );
+    });
+
+    it('RBAC: denies via assertAction', async () => {
+      service = new ProjectMembersService(
+        mockDb,
+        { record: auditSpy } as any,
+        createRbacDenyMock('member.manage') as any,
+      );
+      await expect(
+        service.removeMember('MEGA', 'u2', 'u3'),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 });

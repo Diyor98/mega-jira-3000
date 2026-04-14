@@ -5,7 +5,6 @@ import {
   Optional,
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { eq, and, sql } from 'drizzle-orm';
@@ -15,6 +14,8 @@ import { projects } from '../../database/schema/projects';
 import { users } from '../../database/schema/users';
 import { projectMembers } from '../../database/schema/project-members';
 import { AuditLogService } from '../audit/audit.service';
+import { RbacService } from '../rbac/rbac.service';
+import type { PermissionAction } from '../rbac/rbac.matrix';
 import type { ProjectRole } from '@mega-jira/shared';
 
 const PG_UNIQUE_VIOLATION = '23505';
@@ -26,15 +27,22 @@ export class ProjectMembersService {
   constructor(
     @Inject(DATABASE_TOKEN) private readonly db: Database,
     @Optional() private readonly auditLog?: AuditLogService,
+    @Optional() private readonly rbac?: RbacService,
   ) {}
 
   /**
-   * Read gate: caller must be a member of the project OR the legacy owner.
-   * Used by listByProject so non-admin members can see a read-only team
-   * table per AC #8. Write operations use the stricter
-   * `assertCanManageMembers` below.
+   * Story 8.2: gate goes through RbacService. The old private
+   * `assertProjectAccess` / `assertCanManageMembers` helpers were deleted —
+   * RbacService is the single enforcement surface.
    */
-  private async assertProjectAccess(projectKey: string, userId: string) {
+  private async loadProject(
+    projectKey: string,
+    userId: string,
+    action: PermissionAction,
+  ) {
+    if (this.rbac) {
+      await this.rbac.assertAction(projectKey, userId, action);
+    }
     const [project] = await this.db
       .select({ id: projects.id, key: projects.key, ownerId: projects.ownerId })
       .from(projects)
@@ -43,44 +51,11 @@ export class ProjectMembersService {
     if (!project) {
       throw new NotFoundException(`Project '${projectKey}' not found`);
     }
-
-    if (project.ownerId === userId) {
-      return { project, role: null as ProjectRole | null };
-    }
-
-    const [membership] = await this.db
-      .select({ role: projectMembers.role })
-      .from(projectMembers)
-      .where(
-        and(
-          eq(projectMembers.projectId, project.id),
-          eq(projectMembers.userId, userId),
-        ),
-      )
-      .limit(1);
-
-    if (!membership) {
-      throw new ForbiddenException('You do not have access to this project');
-    }
-    return { project, role: membership.role as ProjectRole };
-  }
-
-  /**
-   * Write gate: caller must be the legacy owner OR a member with role
-   * `project_admin` | `system_admin`. Story 8.2 will unify this with the
-   * broader enforcement gate.
-   */
-  private async assertCanManageMembers(projectKey: string, userId: string) {
-    const { project, role } = await this.assertProjectAccess(projectKey, userId);
-    // Owner passes unconditionally (role is null in that branch).
-    if (role !== null && role !== 'project_admin' && role !== 'system_admin') {
-      throw new ForbiddenException('You do not have permission to manage members');
-    }
     return { project };
   }
 
   async listByProject(projectKey: string, callerId: string) {
-    const { project } = await this.assertProjectAccess(projectKey, callerId);
+    const { project } = await this.loadProject(projectKey, callerId, 'project.read');
 
     return this.db
       .select({
@@ -101,7 +76,7 @@ export class ProjectMembersService {
     callerId: string,
     dto: { email: string; role: ProjectRole },
   ) {
-    const { project } = await this.assertCanManageMembers(projectKey, callerId);
+    const { project } = await this.loadProject(projectKey, callerId, 'member.manage');
 
     const [target] = await this.db
       .select({ id: users.id, email: users.email })
@@ -159,7 +134,7 @@ export class ProjectMembersService {
     targetUserId: string,
     newRole: ProjectRole,
   ) {
-    const { project } = await this.assertCanManageMembers(projectKey, callerId);
+    const { project } = await this.loadProject(projectKey, callerId, 'member.manage');
 
     if (project.ownerId === targetUserId) {
       throw new BadRequestException('Cannot change the role of the project owner');
@@ -212,7 +187,7 @@ export class ProjectMembersService {
   }
 
   async removeMember(projectKey: string, callerId: string, targetUserId: string) {
-    const { project } = await this.assertCanManageMembers(projectKey, callerId);
+    const { project } = await this.loadProject(projectKey, callerId, 'member.manage');
 
     if (project.ownerId === targetUserId) {
       throw new BadRequestException('Cannot remove the project owner');

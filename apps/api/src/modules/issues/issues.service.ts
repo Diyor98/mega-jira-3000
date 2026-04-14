@@ -25,6 +25,8 @@ import { issueLinks } from '../../database/schema/issue-links';
 import { EventService } from '../board/event.service';
 import { NotificationsService, type NotificationInsertRow } from '../notifications/notifications.service';
 import { AuditLogService } from '../audit/audit.service';
+import { RbacService } from '../rbac/rbac.service';
+import type { PermissionAction } from '../rbac/rbac.matrix';
 import { resolveRetentionDays } from '../lifecycle/data-lifecycle.service';
 
 const PG_UNIQUE_VIOLATION = '23505';
@@ -45,9 +47,25 @@ export class IssuesService {
     private readonly eventService: EventService,
     private readonly notificationsService: NotificationsService,
     @Optional() private readonly auditLog?: AuditLogService,
+    @Optional() private readonly rbac?: RbacService,
   ) {}
 
+  /**
+   * Story 8.2: gate every mutating call against the RBAC matrix. Read paths
+   * are gated at the controller layer where the auth Request is available.
+   */
+  private async assertAction(
+    projectKey: string,
+    userId: string,
+    action: PermissionAction,
+  ) {
+    if (this.rbac) {
+      await this.rbac.assertAction(projectKey, userId, action);
+    }
+  }
+
   async create(dto: CreateIssueDto, userId: string, projectKey: string) {
+    await this.assertAction(projectKey, userId, 'issue.create');
     const normalizedDto = {
       ...dto,
       title: typeof dto.title === 'string' ? dto.title.trim() : dto.title,
@@ -418,6 +436,7 @@ export class IssuesService {
   }
 
   async update(projectKey: string, issueId: string, dto: UpdateIssueDto, userId: string) {
+    await this.assertAction(projectKey, userId, 'issue.edit');
     const validation = updateIssueSchema.safeParse(dto);
     if (!validation.success) {
       const message = validation.error.issues.map((i: { message: string }) => i.message).join(', ');
@@ -831,6 +850,7 @@ export class IssuesService {
   }
 
   async createLink(projectKey: string, issueId: string, dto: CreateIssueLinkDto, userId: string) {
+    await this.assertAction(projectKey, userId, 'issue.edit');
     const validation = createIssueLinkSchema.safeParse(dto);
     if (!validation.success) {
       const message = validation.error.issues.map((i: { message: string }) => i.message).join(', ');
@@ -976,6 +996,7 @@ export class IssuesService {
   }
 
   async createBugFromStory(projectKey: string, storyIssueId: string, dto: { title: string; priority?: string; description?: string }, userId: string) {
+    await this.assertAction(projectKey, userId, 'issue.create');
     // Validate input
     const bugValidation = createIssueSchema.safeParse({ ...dto, type: 'Bug' });
     if (!bugValidation.success) {
@@ -1034,6 +1055,7 @@ export class IssuesService {
   }
 
   async softDelete(projectKey: string, issueId: string, issueVersion: number, userId: string) {
+    await this.assertAction(projectKey, userId, 'issue.delete');
     if (!issueVersion || typeof issueVersion !== 'number' || issueVersion < 1) {
       throw new BadRequestException('issueVersion is required and must be a positive integer');
     }
@@ -1109,6 +1131,7 @@ export class IssuesService {
    * `issue.restored` WS event.
    */
   async restore(projectKey: string, issueId: string, userId: string) {
+    await this.assertAction(projectKey, userId, 'issue.delete');
     // Shared parser — throws on invalid env, same behavior as the cron.
     // Previously used raw `Number(process.env.…)` which coerced bad values
     // to NaN and silently made the window check always-false.
