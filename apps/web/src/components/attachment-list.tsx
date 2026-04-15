@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { apiClient } from '../lib/api-client';
 import { relativeTime } from '../lib/relative-time';
 import { useToast } from './toast';
@@ -50,6 +50,7 @@ function iconFor(mime: string): string {
 
 export function AttachmentList({ projectKey, issueId, canUpload = true, canDelete = true }: AttachmentListProps) {
   const toast = useToast();
+  const inputId = useId();
   const [rows, setRows] = useState<Attachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -202,28 +203,29 @@ export function AttachmentList({ projectKey, issueId, canUpload = true, canDelet
         >
           <span>{uploading ? 'Uploading…' : 'Drop a file here, or'}</span>
           {/*
-            File picker trigger — uses a native <label> wrapping a hidden
-            file <input>, NOT a <button> that calls `input.click()`. The
-            button-then-programmatic-click pattern was unreliable in some
-            browser/session states (click fired but the OS picker never
-            opened). The native label is the standards-track way to
-            delegate the click to the input and works in every browser
-            regardless of the input's display state.
+            File picker trigger. The real bug that made this button appear
+            "broken" was in useProjectPermissions, not here: a window-focus
+            refetch fired when the OS picker closed, which briefly flipped
+            `canUpload` false, unmounted this entire block, and dropped the
+            selected file before the change event could fire. Fixed by
+            keeping the previous permission snapshot during refetch.
           */}
           <label
+            htmlFor={inputId}
             className={`text-xs px-2 py-1 rounded bg-[var(--color-accent-blue)] text-white hover:bg-[var(--color-accent-blue-dark)] cursor-pointer ${
               uploading ? 'opacity-50 pointer-events-none' : ''
             }`}
           >
             Attach File
-            <input
-              type="file"
-              accept={ACCEPT_ATTR}
-              onChange={onFileChange}
-              disabled={uploading}
-              className="sr-only"
-            />
           </label>
+          <input
+            id={inputId}
+            type="file"
+            accept={ACCEPT_ATTR}
+            onChange={onFileChange}
+            disabled={uploading}
+            className="hidden"
+          />
         </div>
       )}
     </div>

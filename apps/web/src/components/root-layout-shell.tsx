@@ -220,7 +220,7 @@ export function RootLayoutShell({ children }: RootLayoutShellProps) {
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
   return (
-    <div className="min-h-full flex flex-col">
+    <div className="min-h-screen flex flex-col">
       <MobileBanner />
       <div className="flex flex-1 flex-row relative">
         {/* Hamburger — visible only at 768–1023px */}

@@ -41,7 +41,7 @@ export function Sidebar() {
   if (isAuthPage) return null;
 
   return (
-    <aside className="h-full w-60 min-[1440px]:w-60 lg:w-12 min-[1440px]:[&>*]:flex flex-shrink-0 bg-[var(--color-surface-1)] border-r border-[var(--color-surface-3)] flex flex-col">
+    <aside className="h-full w-60 min-[1440px]:w-60 lg:w-12 flex-shrink-0 bg-[var(--color-surface-1)] border-r border-[var(--color-surface-3)] flex flex-col">
       <div className="px-4 py-3 border-b border-[var(--color-surface-3)] lg:px-2 min-[1440px]:px-4">
         <h2 className="text-xs font-medium text-[var(--color-text-tertiary)] uppercase tracking-wide lg:hidden min-[1440px]:block">
           Projects

@@ -69,7 +69,12 @@ export function useProjectPermissions(
       return;
     }
     let cancelled = false;
-    setData(null);
+    // NOTE: do NOT clear `data` here. A focus-triggered refetch while the
+    // OS file picker was open would unmount the <AttachmentList> upload UI
+    // (canUpload flips false → {canUpload && ...} block unmounts → the
+    // file input the user just picked into disappears before `change`
+    // fires, and the selected file is lost). Keep showing the last known
+    // permissions until the new fetch resolves.
     setLoading(true);
     setError(null);
     apiClient
