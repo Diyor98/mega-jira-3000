@@ -112,6 +112,21 @@ export class IssuesController {
     return this.issuesService.getProgress(projectKey, issueId);
   }
 
+  // NOTE: This route MUST be declared before `@Get(':issueId')` below.
+  // Nest matches routes in declaration order — placing this after the UUID
+  // route would cause `by-key` to be parsed as a (malformed) issueId UUID
+  // and never reach this handler. Story 9.5.
+  @Get('by-key/:issueKey')
+  @HttpCode(HttpStatus.OK)
+  async findByKey(
+    @Param('projectKey') projectKey: string,
+    @Param('issueKey') issueKey: string,
+    @Req() req: Request,
+  ) {
+    await this.gateRead(projectKey, req);
+    return this.issuesService.findByKey(projectKey, issueKey);
+  }
+
   @Get(':issueId')
   @HttpCode(HttpStatus.OK)
   async findById(

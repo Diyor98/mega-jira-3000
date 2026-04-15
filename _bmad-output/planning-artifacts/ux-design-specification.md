@@ -47,7 +47,7 @@ The UX follows the **Asana-Prime** design philosophy: information density maximi
 
 1. **Keyboard-first power user experience.** Cmd+K command palette, keyboard shortcuts for status transitions (e.g., `I` for In Progress, `R` for In Review), quick-create via shortcut. Differentiates from sluggish legacy tools.
 
-2. **Issue detail as slide-over panel.** Asana-style: clicking an issue slides detail in from the right without leaving board context. Maintains spatial awareness. Full-width on narrow viewports.
+2. **Issue detail as centered modal with permalink.** Jira-style: clicking an issue opens a centered modal (`max-w-3xl`, ~960px) over a darkened backdrop. Click-outside or Esc closes it. The issue key in the modal header is a real anchor link to `/projects/[key]/issues/[issueKey]` — Cmd/Ctrl+Click opens the issue on its own dedicated page (full-bleed view of the same `IssueDetailPanel` body), enabling shareable URLs and multi-tab workflows. *(Updated 2026-04-15 — was originally a 480px right-side slide-over; the slide-over caused a cramped two-column field grid at lg and didn't support shareable links.)*
 
 3. **Progressive disclosure in admin settings.** Workflow customization layered: simple defaults first, advanced configuration (transition rules, mandatory fields) on demand. Admin shouldn't need a manual.
 
@@ -586,7 +586,7 @@ flowchart TD
 
 **BoardColumn (Organism):** Kanban column — sticky header (status name + count), cards with 4px gap, inline create at bottom. States: default, drop-target-active, empty.
 
-**SlideOverPanel (Organism):** 480px right-side panel — header (key + type + close), title, 2-column field grid, Markdown description, comment thread, comment input. Slide-in 200ms, Esc to close.
+**IssueDetailModal (Organism):** Centered modal — `max-w-3xl` (~960px), `max-h-[90vh]`, dark backdrop (`bg-black/50`), header (key as `<a href>` permalink + type + close), title, 2-column field grid, Markdown description, comment thread, comment input. Fade-in 150ms backdrop + scale-up 150ms panel, Esc / backdrop-click / close-button to dismiss. Cmd/Ctrl+Click on the key opens `/projects/[key]/issues/[issueKey]` in a new tab — a dedicated page that re-uses the same `IssueDetailPanel` body without the modal chrome. *(Replaced the 480px right-side `SlideOverPanel` on 2026-04-15.)*
 
 **FilterBar (Organism):** Horizontal chip bar — dropdown triggers + active filter chips with remove. Saved preset selector. Filters persist across session.
 
@@ -683,7 +683,7 @@ Desktop-first. Power-user productivity tool, not consumer app.
 |---------|---------|-------------|------------|
 | Sidebar | 240px expanded | 48px icons | Hidden (hamburger) |
 | Board columns | 6 visible | 4-5 + scroll | 2-3 + scroll |
-| Detail panel | 480px slide-over | 400px slide-over | Full-width overlay |
+| Detail modal | Centered ~960px (max-w-3xl) | Centered ~720px | Full-screen sheet |
 | Filter bar | Horizontal chips | Scrollable chips | Collapsed button |
 | Card density | Full | Full | Compact (key + title) |
 

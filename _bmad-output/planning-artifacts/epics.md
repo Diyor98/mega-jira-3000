@@ -542,7 +542,29 @@ As a **PM**, I want a List view, So that I can triage with dense, sortable data.
 
 **Acceptance Criteria:**
 
-**Given** I click "List" toggle **Then** issues display in table grouped by status **And** clicking issue opens slide-over panel **And** active filters carry over from Board
+**Given** I click "List" toggle **Then** issues display in table grouped by status **And** clicking issue opens the issue detail modal (Story 9.5) **And** active filters carry over from Board
+
+### Story 9.5: Issue Detail Modal & Permalink
+
+As a **user**, I want issue detail to open as a centered modal (not a side slide-over) **and** I want each issue to have a shareable URL, So that I can focus on one issue without losing board context AND link teammates to a specific issue.
+
+**Background:** The original Story 2.2 implementation used a 480px right-side `SlideOverPanel`. At lg viewports this cramped the 2-column field grid and there was no way to share a direct link to an issue. This story replaces the slide-over with a Jira-style centered modal AND introduces a dedicated route per issue.
+
+**Acceptance Criteria:**
+
+**Given** I click an issue card on the board or a row on the list **Then** a centered modal opens (`max-w-3xl`, `max-h-[90vh]`) over a `bg-black/50` backdrop **And** the underlying board remains visible but non-interactive **And** Esc, click-outside, and the close button all dismiss it.
+
+**Given** the modal is open **Then** the header shows the issue key as an `<a href="/projects/[key]/issues/[issueKey]">` link **And** Cmd/Ctrl+Click on the key opens that URL in a new browser tab **And** the new tab renders a full-page view of the same `IssueDetailPanel` body without the modal chrome.
+
+**Given** I navigate directly to `/projects/[key]/issues/[issueKey]` **Then** the dedicated issue page loads server-side with the same content as the modal **And** a "Back to board" link returns me to `/projects/[key]` **And** if the issue does not exist or I lack `project.read`, I get a friendly 404/403.
+
+**Given** the modal is open **And** I open the command palette (Cmd+K) **And** I select "Open issue MEGA-123" **Then** the new issue replaces the current one in the modal (no double-modal stacking).
+
+**Given** the focus trap is active in the modal **Then** Tab cycles only inside the modal **And** focus returns to the originating card/row on close (per UX-DR1).
+
+**Given** I'm on a < 768px viewport **Then** the modal renders as a full-screen sheet instead of a centered card.
+
+**Files affected (informational, ~6 files):** new `components/issue-detail-modal.tsx`, new route `app/projects/[key]/issues/[issueKey]/page.tsx`, modified `app/projects/[key]/page.tsx` (swap `SlideOverPanel` → `IssueDetailModal`, link the key), modified `components/issue-card-content.tsx` and `components/issue-list-view.tsx` (key becomes a real link with `Cmd+Click` semantics), modified `lib/palette-actions.ts` (open-issue action navigates to the permalink route or replaces the modal). The existing `slide-over-panel.tsx` stays for now (used elsewhere) but the issue-detail usage is removed.
 
 ### Story 9.4: CI/CD Pipeline Setup
 

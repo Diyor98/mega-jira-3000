@@ -359,6 +359,51 @@ export class IssuesService {
     return issue;
   }
 
+  async findByKey(projectKey: string, issueKey: string) {
+    const [project] = await this.db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.key, projectKey))
+      .limit(1);
+
+    if (!project) {
+      throw new NotFoundException(`Project '${projectKey}' not found`);
+    }
+
+    const [issue] = await this.db
+      .select({
+        id: issues.id,
+        issueKey: issues.issueKey,
+        title: issues.title,
+        description: issues.description,
+        type: issues.type,
+        priority: issues.priority,
+        statusId: issues.statusId,
+        assigneeId: issues.assigneeId,
+        reporterId: issues.reporterId,
+        parentId: issues.parentId,
+        issueVersion: issues.issueVersion,
+        resolution: issues.resolution,
+        createdAt: issues.createdAt,
+        updatedAt: issues.updatedAt,
+      })
+      .from(issues)
+      .where(
+        and(
+          eq(issues.issueKey, issueKey),
+          eq(issues.projectId, project.id),
+          isNull(issues.deletedAt),
+        ),
+      )
+      .limit(1);
+
+    if (!issue) {
+      throw new NotFoundException(`Issue '${issueKey}' not found`);
+    }
+
+    return issue;
+  }
+
   async findChildren(projectKey: string, issueId: string) {
     const [project] = await this.db
       .select({ id: projects.id })

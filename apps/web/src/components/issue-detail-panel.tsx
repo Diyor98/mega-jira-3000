@@ -69,9 +69,16 @@ interface IssueDetailPanelProps {
   onClose: () => void;
   onDeleted?: () => void;
   users?: Array<{ id: string; email: string }>;
+  /**
+   * When true, the header `×` close button is hidden. The dedicated
+   * permalink route (`/projects/[key]/issues/[issueKey]`) sets this so
+   * the page navigation chrome owns dismissal instead. Default false
+   * (modal usage continues to render the close button).
+   */
+  hideCloseButton?: boolean;
 }
 
-export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted, users = [] }: IssueDetailPanelProps) {
+export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted, users = [], hideCloseButton = false }: IssueDetailPanelProps) {
   const toast = useToast();
   const { can: canPerm } = useProjectPermissions(projectKey);
   const canEdit = canPerm('issue.edit');
@@ -256,19 +263,33 @@ export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted, user
           >
             {issue.type.charAt(0).toUpperCase() + issue.type.slice(1)}
           </span>
-          <span className="text-sm font-medium text-[var(--color-text-primary)]">
+          <a
+            id="issue-detail-title"
+            href={`/projects/${projectKey}/issues/${issue.issueKey}`}
+            onClick={(e) => {
+              // Plain left-click stays inside the modal. Cmd/Ctrl/Shift/middle-
+              // click fall through to the browser → opens the dedicated
+              // permalink route in a new tab. Story 9.5 AC21.
+              if (!e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) {
+                e.preventDefault();
+              }
+            }}
+            className="text-sm font-medium text-[var(--color-text-primary)] hover:underline"
+          >
             {issue.issueKey}
-          </span>
+          </a>
         </div>
-        <button
-          onClick={onClose}
-          className="p-1 rounded hover:bg-[var(--color-surface-2)] text-[var(--color-text-tertiary)] transition-colors"
-          aria-label="Close panel"
-        >
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-          </svg>
-        </button>
+        {!hideCloseButton && (
+          <button
+            onClick={onClose}
+            className="p-1 rounded hover:bg-[var(--color-surface-2)] text-[var(--color-text-tertiary)] transition-colors"
+            aria-label="Close panel"
+          >
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Conflict notification (calm, collaboration tone) */}

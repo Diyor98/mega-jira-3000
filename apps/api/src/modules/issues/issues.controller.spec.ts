@@ -4,10 +4,10 @@ import { IssuesService } from './issues.service';
 
 describe('IssuesController', () => {
   let controller: IssuesController;
-  let issuesService: { create: jest.Mock; findByProject: jest.Mock; findById: jest.Mock; update: jest.Mock; findChildren: jest.Mock; getProgress: jest.Mock; createLink: jest.Mock; getLinks: jest.Mock; createBugFromStory: jest.Mock; softDelete: jest.Mock };
+  let issuesService: { create: jest.Mock; findByProject: jest.Mock; findById: jest.Mock; findByKey: jest.Mock; update: jest.Mock; findChildren: jest.Mock; getProgress: jest.Mock; createLink: jest.Mock; getLinks: jest.Mock; createBugFromStory: jest.Mock; softDelete: jest.Mock };
 
   beforeEach(async () => {
-    issuesService = { create: jest.fn(), findByProject: jest.fn(), findById: jest.fn(), update: jest.fn(), findChildren: jest.fn(), getProgress: jest.fn(), createLink: jest.fn(), getLinks: jest.fn(), createBugFromStory: jest.fn(), softDelete: jest.fn() };
+    issuesService = { create: jest.fn(), findByProject: jest.fn(), findById: jest.fn(), findByKey: jest.fn(), update: jest.fn(), findChildren: jest.fn(), getProgress: jest.fn(), createLink: jest.fn(), getLinks: jest.fn(), createBugFromStory: jest.fn(), softDelete: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [IssuesController],
@@ -64,6 +64,18 @@ describe('IssuesController', () => {
       const result = await controller.findById('MEGA', 'issue-id', { user: { userId: 'u1' } } as never);
 
       expect(issuesService.findById).toHaveBeenCalledWith('MEGA', 'issue-id');
+      expect(result).toEqual(expectedIssue);
+    });
+  });
+
+  describe('GET /api/v1/projects/:projectKey/issues/by-key/:issueKey', () => {
+    it('calls service.findByKey with projectKey and issueKey', async () => {
+      const expectedIssue = { id: 'issue-id', issueKey: 'MEGA-1', title: 'Fix bug' };
+      issuesService.findByKey.mockResolvedValue(expectedIssue);
+
+      const result = await controller.findByKey('MEGA', 'MEGA-1', { user: { userId: 'u1' } } as never);
+
+      expect(issuesService.findByKey).toHaveBeenCalledWith('MEGA', 'MEGA-1');
       expect(result).toEqual(expectedIssue);
     });
   });

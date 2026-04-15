@@ -18,7 +18,7 @@ import {
 import { apiClient } from '../../../lib/api-client';
 import { CreateIssueForm } from '../../../components/create-issue-form';
 import { useProjectPermissions } from '../../../lib/use-project-permissions';
-import { SlideOverPanel } from '../../../components/slide-over-panel';
+import { IssueDetailModal } from '../../../components/issue-detail-modal';
 import { IssueDetailPanel } from '../../../components/issue-detail-panel';
 import { useWebSocket } from '../../../hooks/use-websocket';
 import { ConflictNotification } from '../../../components/conflict-notification';
@@ -252,9 +252,12 @@ export default function ProjectPage() {
   // Initialize selectedIssueId from a `?issue=<id>` query param (deep-link
   // from NotificationBell rows). Read once on first render; the mount-time
   // effect below strips the param so a reload doesn't re-open the same issue.
-  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(
-    () => searchParams.get('issue'),
-  );
+  // Story 9.5: `?issue=` now contains the issue KEY (e.g. MEGA-1), not a
+  // UUID. Backward-compat: if the param looks like a UUID, the resolver
+  // effect below still matches against `issue.id`. The init value here is
+  // null because we can't resolve key → id until `issues` has loaded;
+  // resolution is handled by the sync effect after `loadData()` resolves.
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const [epicProgress, setEpicProgress] = useState<Record<string, number>>({});
   const [activeIssue, setActiveIssue] = useState<Issue | null>(null);
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
@@ -464,21 +467,64 @@ export default function ProjectPage() {
     loadData();
   }, [loadData]);
 
-  // Deep-link watcher: whenever `?issue=` appears in the URL (either on first
-  // load, or on a same-project notification click that `router.replace`s to
-  // the same route with a new query string), open the detail panel for that
-  // issue and then strip the param so a reload doesn't re-open the same one.
-  // This runs on every searchParams change so subsequent notification clicks
-  // against the currently-mounted page also work.
+  // Story 9.5: resolve `?issue=<key>` (or `?issue=<uuid>` for backward-compat)
+  // to the matching `issue.id` once the issues list is loaded. Unlike the
+  // pre-9.5 implementation, we DO NOT strip the param after opening — the
+  // URL is now a real permalink and must persist across reloads. The URL
+  // sync effect (further below) keeps `?issue=` in step with whichever
+  // issue is currently selected.
   useEffect(() => {
     const issueParam = searchParams.get('issue');
-    if (!issueParam) return;
-    setSelectedIssueId(issueParam);
+    if (!issueParam) {
+      // No param → make sure no issue is selected from a stale state.
+      // Skip if user explicitly closed (selectedIssueId already null).
+      return;
+    }
+    if (issues.length === 0) return; // wait for loadData to resolve
+    const upper = issueParam.toUpperCase();
+    const match = issues.find(
+      (i) => i.issueKey.toUpperCase() === upper || i.id === issueParam,
+    );
+    if (match) {
+      if (match.id !== selectedIssueId) setSelectedIssueId(match.id);
+    } else {
+      // Unknown issue key/id — non-blocking ephemeral banner, leave board
+      // open. Can't use useToast() at this level (provider is mounted
+      // below us); the shortcutMessage banner is the existing escape hatch.
+      showShortcutMessage(`Issue '${issueParam}' not found.`);
+      // Strip the bad param so a reload doesn't re-fire the toast.
+      const next = new URLSearchParams(searchParams.toString());
+      next.delete('issue');
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, issues]);
+
+  // Story 9.5: keep `?issue=<key>` in the URL in sync with whichever issue
+  // is currently open in the modal. Replaces the old "strip after open"
+  // behavior so the URL becomes a real shareable permalink. Updates use
+  // router.replace so the back button doesn't fill with intermediate
+  // selection states.
+  useEffect(() => {
+    const current = searchParams.get('issue');
+    if (selectedIssueId === null) {
+      if (current !== null) {
+        const next = new URLSearchParams(searchParams.toString());
+        next.delete('issue');
+        const qs = next.toString();
+        router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      }
+      return;
+    }
+    const issue = issues.find((i) => i.id === selectedIssueId);
+    if (!issue) return; // can't write the key until the issue is in the list
+    if (current?.toUpperCase() === issue.issueKey.toUpperCase()) return;
     const next = new URLSearchParams(searchParams.toString());
-    next.delete('issue');
-    const qs = next.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [searchParams, router, pathname]);
+    next.set('issue', issue.issueKey);
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIssueId, issues]);
 
   // Story 9.1: command-palette bridge. Same-route commands arrive via window
   // events; cross-route commands arrive via sessionStorage (written by the
@@ -1194,7 +1240,7 @@ export default function ProjectPage() {
       </DndContext>
       )}
 
-      <SlideOverPanel
+      <IssueDetailModal
         isOpen={selectedIssueId !== null}
         onClose={() => setSelectedIssueId(null)}
       >
@@ -1210,7 +1256,7 @@ export default function ProjectPage() {
             }}
           />
         )}
-      </SlideOverPanel>
+      </IssueDetailModal>
       {shortcutMessage && (
         <div
           role="status"

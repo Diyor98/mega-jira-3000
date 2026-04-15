@@ -490,6 +490,90 @@ describe('IssuesService', () => {
     });
   });
 
+  describe('findByKey', () => {
+    const mockDetailIssue = {
+      id: 'issue-id',
+      issueKey: 'MEGA-1',
+      title: 'Fix bug',
+      description: 'Some description',
+      type: 'bug',
+      priority: 'P1',
+      statusId: 'status-id',
+      assigneeId: null,
+      reporterId: 'user-1',
+      parentId: null,
+      issueVersion: 1,
+      resolution: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    it('returns issue by key', async () => {
+      let selectCallCount = 0;
+      mockDb.select.mockImplementation(() => {
+        selectCallCount++;
+        if (selectCallCount === 1) {
+          return {
+            from: jest.fn().mockReturnValue({
+              where: jest.fn().mockReturnValue({
+                limit: jest.fn().mockResolvedValue([mockProject]),
+              }),
+            }),
+          };
+        }
+        return {
+          from: jest.fn().mockReturnValue({
+            where: jest.fn().mockReturnValue({
+              limit: jest.fn().mockResolvedValue([mockDetailIssue]),
+            }),
+          }),
+        };
+      });
+
+      const result = await service.findByKey('MEGA', 'MEGA-1');
+
+      expect(result).toEqual(mockDetailIssue);
+      expect(result).toHaveProperty('updatedAt');
+    });
+
+    it('throws NotFoundException for missing issue key', async () => {
+      let selectCallCount = 0;
+      mockDb.select.mockImplementation(() => {
+        selectCallCount++;
+        if (selectCallCount === 1) {
+          return {
+            from: jest.fn().mockReturnValue({
+              where: jest.fn().mockReturnValue({
+                limit: jest.fn().mockResolvedValue([mockProject]),
+              }),
+            }),
+          };
+        }
+        return {
+          from: jest.fn().mockReturnValue({
+            where: jest.fn().mockReturnValue({
+              limit: jest.fn().mockResolvedValue([]),
+            }),
+          }),
+        };
+      });
+
+      await expect(service.findByKey('MEGA', 'MEGA-9999')).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws NotFoundException for missing project', async () => {
+      mockDb.select.mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            limit: jest.fn().mockResolvedValue([]),
+          }),
+        }),
+      });
+
+      await expect(service.findByKey('INVALID', 'MEGA-1')).rejects.toThrow(NotFoundException);
+    });
+  });
+
   describe('update', () => {
     const updatedIssue = {
       id: 'issue-id',

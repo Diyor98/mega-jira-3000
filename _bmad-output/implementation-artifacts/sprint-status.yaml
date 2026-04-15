@@ -32,7 +32,7 @@
 # - Dependency chain: Epic 1 → Epic 2 → Epic 3 → Epic 4. Epics 5-9 parallel after Epic 3.
 
 generated: 2026-04-09
-last_updated: 2026-04-14 # stories 9.1, 9.2, 9.3 done
+last_updated: 2026-04-15 # story 9.5 ready for review (issue detail modal & permalink)
 project: Mega Jira 3000
 project_key: MEGA
 tracking_system: file-system
@@ -107,4 +107,5 @@ development_status:
   9-2-keyboard-shortcuts: done
   9-3-list-view: done
   9-4-ci-cd-pipeline-setup: backlog
+  9-5-issue-detail-modal-and-permalink: review
   epic-9-retrospective: optional
