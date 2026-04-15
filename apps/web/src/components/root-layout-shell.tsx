@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from './sidebar';
 import { MobileBanner } from './mobile-banner';
 import { CommandPalette } from './command-palette';
@@ -46,8 +46,24 @@ export function RootLayoutShell({ children }: RootLayoutShellProps) {
     paletteOpenRef.current = paletteOpen;
   }, [paletteOpen]);
   const pathname = usePathname();
+  const router = useRouter();
   const shortcutsEnabled = !AUTH_ROUTES.has(pathname);
   const onProjectRoute = /^\/projects\/[^/]+/.test(pathname);
+
+  // Bug fix: the api-client dispatches `mega:session-expired` when the
+  // access token is gone AND /auth/refresh fails. The per-page ToastProvider
+  // handles this on project routes, but any non-project route (/projects/new,
+  // /notifications, etc.) had no listener and would hang on "Unable to reach
+  // the server". Fallback redirect lives here so every authenticated route
+  // gets bounced to /login on expiry regardless of provider state.
+  useEffect(() => {
+    const onSessionExpired = () => {
+      if (AUTH_ROUTES.has(pathname)) return;
+      router.replace('/login');
+    };
+    window.addEventListener('mega:session-expired', onSessionExpired);
+    return () => window.removeEventListener('mega:session-expired', onSessionExpired);
+  }, [pathname, router]);
 
   // Close drawer + palette + help on route change
   useEffect(() => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { apiClient } from '../lib/api-client';
 import { relativeTime } from '../lib/relative-time';
 import { useToast } from './toast';
@@ -54,7 +54,6 @@ export function AttachmentList({ projectKey, issueId, canUpload = true, canDelet
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ---- load on mount ----
   useEffect(() => {
@@ -202,21 +201,29 @@ export function AttachmentList({ projectKey, issueId, canUpload = true, canDelet
           }`}
         >
           <span>{uploading ? 'Uploading…' : 'Drop a file here, or'}</span>
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="text-xs px-2 py-1 rounded bg-[var(--color-accent-blue)] text-white hover:bg-[var(--color-accent-blue-dark)] disabled:opacity-50"
+          {/*
+            File picker trigger — uses a native <label> wrapping a hidden
+            file <input>, NOT a <button> that calls `input.click()`. The
+            button-then-programmatic-click pattern was unreliable in some
+            browser/session states (click fired but the OS picker never
+            opened). The native label is the standards-track way to
+            delegate the click to the input and works in every browser
+            regardless of the input's display state.
+          */}
+          <label
+            className={`text-xs px-2 py-1 rounded bg-[var(--color-accent-blue)] text-white hover:bg-[var(--color-accent-blue-dark)] cursor-pointer ${
+              uploading ? 'opacity-50 pointer-events-none' : ''
+            }`}
           >
             Attach File
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={ACCEPT_ATTR}
-            onChange={onFileChange}
-            className="hidden"
-          />
+            <input
+              type="file"
+              accept={ACCEPT_ATTR}
+              onChange={onFileChange}
+              disabled={uploading}
+              className="sr-only"
+            />
+          </label>
         </div>
       )}
     </div>

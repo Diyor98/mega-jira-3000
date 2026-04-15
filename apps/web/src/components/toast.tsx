@@ -111,6 +111,21 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener('mega:forbidden', onForbidden as EventListener);
   }, [pathname, router, push]);
 
+  // Story 9.x (bug fix): the access token expired AND the refresh token
+  // either expired or failed. The user is effectively logged out — show a
+  // toast and bounce them to /login so they can sign back in. Guard against
+  // double-firing on /login itself.
+  useEffect(() => {
+    const onSessionExpired = () => {
+      if (pathname === '/login' || pathname === '/register') return;
+      push('error', 'Your session expired. Please sign in again.');
+      router.replace('/login');
+    };
+    window.addEventListener('mega:session-expired', onSessionExpired as EventListener);
+    return () =>
+      window.removeEventListener('mega:session-expired', onSessionExpired as EventListener);
+  }, [pathname, router, push]);
+
   const success = useCallback(
     (m: string, options?: ToastOptions) => push('success', m, options),
     [push],
