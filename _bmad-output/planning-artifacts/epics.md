@@ -566,6 +566,30 @@ As a **user**, I want issue detail to open as a centered modal (not a side slide
 
 **Files affected (informational, ~6 files):** new `components/issue-detail-modal.tsx`, new route `app/projects/[key]/issues/[issueKey]/page.tsx`, modified `app/projects/[key]/page.tsx` (swap `SlideOverPanel` → `IssueDetailModal`, link the key), modified `components/issue-card-content.tsx` and `components/issue-list-view.tsx` (key becomes a real link with `Cmd+Click` semantics), modified `lib/palette-actions.ts` (open-issue action navigates to the permalink route or replaces the modal). The existing `slide-over-panel.tsx` stays for now (used elsewhere) but the issue-detail usage is removed.
 
+### Story 9.6: Edit Assignee in Issue Detail
+
+As a **team member**, I want to **change an issue's assignee directly from the detail view**, So that I can re-route work without leaving the issue context (no extra menus, no separate "edit" modal).
+
+**Background:** The issue detail panel currently displays the assignee as a truncated UUID (`apps/web/src/components/issue-detail-panel.tsx:391`) and is read-only. The backend's `PATCH /issues/:id` endpoint already accepts `assigneeId` (nullable), and the `users` list is already loaded by the project page and passed into `<IssueDetailPanel>` as a prop. Story 9.6 wires the existing pieces together with an inline editor matching the existing priority-edit pattern at line 366.
+
+**Acceptance Criteria:**
+
+**Given** I am viewing an issue in the detail modal AND I have the `issue.edit` permission **When** I click the Assignee field **Then** the value swaps to a `<select>` populated with all project users (showing each user's email prefix) plus an "Unassigned" sentinel option **And** the current assignee is preselected.
+
+**Given** the assignee select is open **When** I pick a different user **Then** the change auto-saves via `PATCH /issues/:id` with the new `assigneeId` **And** the panel reflects the new assignee email immediately **And** a success toast confirms "Assignee updated".
+
+**Given** the assignee select is open **When** I pick "Unassigned" **Then** the request is sent with `assigneeId: null` **And** the field shows "Unassigned" in tertiary text style.
+
+**Given** I press Esc inside the open select **Then** the edit is cancelled and the field reverts without firing a request.
+
+**Given** the PATCH request fails (network, 403, conflict) **Then** an error toast surfaces the server message **And** the field reverts to the previous value (no optimistic-update lie).
+
+**Given** I do NOT have `issue.edit` permission **Then** the assignee field renders as plain read-only text (the existing read-only style) and clicking it does nothing.
+
+**Given** the `users` list is empty (still loading) **Then** the field falls back to read-only text until the list arrives.
+
+**Files affected (informational, ~2 files):** `apps/web/src/components/issue-detail-panel.tsx` (replace the read-only block at lines 387–393 with the same click-to-edit pattern used for priority at lines 365–376; reuse the existing `users` prop and the `PATCH` helper). Optionally also update the assignee display from "first 8 chars of UUID" to "email prefix" in the same patch — same data shape.
+
 ### Story 9.4: CI/CD Pipeline Setup
 
 As a **DevOps engineer**, I want automated testing and deployment, So that code quality is enforced.

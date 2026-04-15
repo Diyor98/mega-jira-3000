@@ -629,7 +629,7 @@ Max 1 primary button per context. Danger never primary. Min 32px height. Icon-on
 ### Form Patterns
 
 - **Inline creation:** "+" in column → text input inline → type title → Enter. No modal.
-- **Detail panel editing:** Click field value → editable state → Enter or click-away to save. Auto-save, no Save button.
+- **Detail panel editing:** Click field value → editable state → Enter or click-away to save. Auto-save, no Save button. Editable fields include title, priority, description, **and assignee** (added 2026-04-15 via Story 9.6 — a `<select>` populated from the project's user list with an "Unassigned" sentinel option).
 - **Workflow prompts:** Slide-down at drop position, max 2 fields, auto-focus, Enter/Esc.
 - **Validation:** Real-time (debounced 300ms), red outline + error text. Never clear user input on error.
 

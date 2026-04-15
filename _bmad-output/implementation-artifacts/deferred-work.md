@@ -145,3 +145,10 @@
 - Audit action variant `workflowStatus.renamedAndReordered` is undocumented in the spec (which enumerated add/rename/reorder/delete only)
 - Frontend isOwner derived from GET /projects list — works today because the endpoint filters by owner, but will need revision when Epic 8 ships shared projects
 - Regex-based 409 message parsing on the frontend (/Status has (\d+) issue/) is brittle to backend message format changes / i18n
+
+## Deferred from: code review of 9-6-edit-assignee-in-issue-detail (2026-04-15)
+
+- Click-to-edit wrappers on the issue-detail-panel (priority, title, description, assignee) are `<div onClick>` with no `role="button"`, `tabIndex`, or `onKeyDown` — keyboard-only users cannot enter edit mode. Pre-existing pattern across all inline-edit fields; fixing requires touching all four in one pass for consistency (apps/web/src/components/issue-detail-panel.tsx)
+- When the assigned user no longer exists in the loaded `users` prop (stale prop, deleted user), the read display falls back to the first 8 chars of the UUID with no affordance to re-assign or clear. Minor data-staleness corner case (apps/web/src/components/issue-detail-panel.tsx)
+- The `conflict` state is not automatically cleared when the user switches editing from one field to another — a stale `ConflictNotification` for a previous field can linger while the user edits a different field. Pre-existing in all inline-edit fields (apps/web/src/components/issue-detail-panel.tsx:310)
+- `saveField` silently drops concurrent calls when `saving === true`. No user-visible feedback (no toast, no spinner) when a fast double-click gets coalesced. Pre-existing in all inline-edit fields (apps/web/src/components/issue-detail-panel.tsx:158)

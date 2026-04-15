@@ -244,6 +244,20 @@ export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted, user
 
   const typeColor = TYPE_COLORS[issue.type] ?? TYPE_COLORS.task;
   const priorityColor = PRIORITY_COLORS[issue.priority] ?? PRIORITY_COLORS.P3;
+  // Story 9.6: show the assigned user's email prefix (part before `@`)
+  // instead of a truncated UUID. Falls back to the first 8 chars of the
+  // UUID if the user isn't in the loaded `users` list (stale prop,
+  // deleted user) so we never crash on bad data.
+  const assigneeDisplay = issue.assigneeId
+    ? users.find((u) => u.id === issue.assigneeId)?.email.split('@')[0] ??
+      `${issue.assigneeId.slice(0, 8)}...`
+    : null;
+  // Story 9.6: assignee field is click-to-edit only when the user has
+  // issue.edit permission AND there's at least one user to pick from.
+  // Without this guard, opening a select with zero options would let the
+  // only value be Unassigned — surprising and useless.
+  const assigneeEditable = canEdit && users.length > 0;
+  const sortedUsers = [...users].sort((a, b) => a.email.localeCompare(b.email));
   const createdDate = new Date(issue.createdAt).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
@@ -384,12 +398,52 @@ export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted, user
           </span>
         </div>
 
-        {/* Assignee — Read-only for now (needs user lookup) */}
+        {/* Assignee — Story 9.6: inline edit via select populated from the
+            `users` prop. Mirrors the priority-edit pattern above. */}
         <div>
           <p className="text-xs text-[var(--color-text-tertiary)] mb-1">Assignee</p>
-          <span className="text-sm text-[var(--color-text-primary)]">
-            {issue.assigneeId ? issue.assigneeId.slice(0, 8) + '...' : 'Unassigned'}
-          </span>
+          {editingField === 'assignee' ? (
+            <select
+              value={editDraft}
+              onChange={(e) => {
+                const next = e.target.value === '' ? null : e.target.value;
+                saveField('assigneeId', next);
+                setEditingField(null);
+              }}
+              onBlur={() => setEditingField(null)}
+              aria-label="Assignee"
+              autoFocus
+              className="text-sm rounded border border-[var(--color-accent-blue)] bg-[var(--color-surface-0)] text-[var(--color-text-primary)] px-1 py-0.5"
+            >
+              <option value="">Unassigned</option>
+              {sortedUsers.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.email.split('@')[0]}
+                </option>
+              ))}
+            </select>
+          ) : assigneeEditable ? (
+            <div
+              className="cursor-pointer hover:bg-[var(--color-surface-2)] rounded px-1 py-0.5 -mx-1"
+              onClick={() => startEdit('assignee', issue.assigneeId ?? '')}
+            >
+              {assigneeDisplay ? (
+                <span className="text-sm text-[var(--color-text-primary)]">
+                  {assigneeDisplay}
+                </span>
+              ) : (
+                <span className="text-sm text-[var(--color-text-tertiary)]">
+                  Unassigned
+                </span>
+              )}
+            </div>
+          ) : assigneeDisplay ? (
+            <span className="text-sm text-[var(--color-text-primary)]">
+              {assigneeDisplay}
+            </span>
+          ) : (
+            <span className="text-sm text-[var(--color-text-tertiary)]">Unassigned</span>
+          )}
         </div>
 
         {/* Reporter — Read-only (set at creation) */}
