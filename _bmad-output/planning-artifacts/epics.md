@@ -620,6 +620,31 @@ The status fix needs **one additional prop**: the project page (`apps/web/src/ap
 - `apps/web/src/app/projects/[key]/issues/[issueKey]/page.tsx` — fetch the project's `statuses` list alongside `users`, pass both into `<IssueDetailPanel>`.
 - (No API changes — the existing `GET /projects/:key/statuses` endpoint already returns the shape we need.)
 
+### Story 9.8: Field Labels on Create-Issue Form
+
+As a **user filling out the create-issue form**, I want **visible labels above every input** (Title, Type, Priority, Description), So that I know what each field is without having to click into it to see the placeholder — especially after I've already started typing and the placeholder has disappeared.
+
+**Background:** `apps/web/src/components/create-issue-form.tsx` (shipped in Story 2.1) uses `placeholder="Issue title"`, `placeholder="Description (Markdown)"`, and no hints at all on the Type/Priority selects. Once the user types into Title or picks from a select, there's no persistent indication of what the field is for. This is also an accessibility gap: screen readers get no associated label, and the selects have no accessible name beyond their options.
+
+**Acceptance Criteria:**
+
+**Given** I open the create-issue form **Then** every input has a visible `<label>` rendered directly above it with the text: "Title", "Type", "Priority", "Description" **And** the labels use the same `text-xs text-[var(--color-text-tertiary)] mb-1` style as the field grid labels in the detail panel (matching the existing design system).
+
+**Given** a field is required (Title and Type per the existing `createIssueSchema`) **Then** its label has a red asterisk suffix — `Title *` — colored `text-[var(--color-status-red)]`.
+
+**Given** every label **Then** it uses `htmlFor` bound to a stable `id` on the matching input/select/textarea, so clicking the label focuses the field and screen readers announce the correct name (WCAG 1.3.1 / 4.1.2).
+
+**Given** I start typing into the Title field **Then** the placeholder disappears (standard browser behavior) **And** the label above still tells me this is the Title field — no loss of context.
+
+**Given** the form renders in its error state (red banner, red inline field errors) **Then** the labels still render the same way — error styling is additive to the existing field error paragraphs, not a label replacement.
+
+**Given** the existing placeholder text was doing useful hint work (e.g., "Description (Markdown)" signals the Markdown-rendering behavior) **Then** the placeholder stays in place as a *hint* under the now-labeled field — labels describe what, placeholders describe how/example.
+
+**Files affected (informational, 1 file):**
+- `apps/web/src/components/create-issue-form.tsx` — add a `<label>` element above each field, wire `htmlFor`/`id` pairs, keep placeholders for hint duty, no other changes.
+
+No API changes, no new props, no new state. ~15 lines of diff.
+
 ### Story 9.4: CI/CD Pipeline Setup
 
 As a **DevOps engineer**, I want automated testing and deployment, So that code quality is enforced.

@@ -628,6 +628,7 @@ Max 1 primary button per context. Danger never primary. Min 32px height. Icon-on
 
 ### Form Patterns
 
+- **Field labels:** Every form input must have a visible `<label>` above it — no placeholder-only fields. Labels are `text-xs text-[var(--color-text-tertiary)]` uppercase-style to match the detail-panel field grid. Required fields get a red `*` suffix after the label text (added 2026-04-15 via Story 9.8 — the create-issue form shipped placeholder-only in Story 2.1 and was retrofitted in 9.8).
 - **Inline creation:** "+" in column → text input inline → type title → Enter. No modal.
 - **Detail panel editing:** Click field value → editable state → Enter or click-away to save. Auto-save, no Save button. Editable fields include title, priority, description, **and assignee** (added 2026-04-15 via Story 9.6 — a `<select>` populated from the project's user list with an "Unassigned" sentinel option). Read-only fields (**Status**, **Reporter**) show human-readable names — the workflow status name and the reporter's email prefix respectively — never raw UUIDs (fixed 2026-04-15 via Story 9.7).
 - **Workflow prompts:** Slide-down at drop position, max 2 fields, auto-focus, Enter/Esc.

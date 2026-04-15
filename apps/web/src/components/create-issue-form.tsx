@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { createIssueSchema, ISSUE_TYPES, ISSUE_PRIORITIES } from '@mega-jira/shared';
 import { apiClient } from '../lib/api-client';
 
@@ -17,6 +17,13 @@ interface CreateIssueFormProps {
 }
 
 export function CreateIssueForm({ projectKey, onCreated, onCancel }: CreateIssueFormProps) {
+  // Story 9.8: stable ids for label/htmlFor association. One useId call
+  // with suffixes, matching the attachment-list.tsx pattern.
+  const baseId = useId();
+  const titleId = `${baseId}-title`;
+  const typeId = `${baseId}-type`;
+  const priorityId = `${baseId}-priority`;
+  const descId = `${baseId}-desc`;
   const [title, setTitle] = useState('');
   const [type, setType] = useState<string>('Story');
   const [priority, setPriority] = useState<string>('P3');
@@ -69,47 +76,83 @@ export function CreateIssueForm({ projectKey, onCreated, onCancel }: CreateIssue
           </div>
         )}
 
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Issue title"
-          className="w-full px-3 py-2 text-sm rounded border border-[var(--color-surface-3)] bg-[var(--color-surface-0)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-blue)]"
-          autoFocus
-        />
-        {errors.title && (
-          <p className="text-xs text-[var(--color-status-red)]">{errors.title}</p>
-        )}
-
-        <div className="flex gap-2">
-          <select
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-            className="flex-1 px-3 py-2 text-sm rounded border border-[var(--color-surface-3)] bg-[var(--color-surface-0)] text-[var(--color-text-primary)]"
+        <div>
+          <label
+            htmlFor={titleId}
+            className="text-xs text-[var(--color-text-tertiary)] mb-1 block"
           >
-            {ISSUE_TYPES.map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
-
-          <select
-            value={priority}
-            onChange={(e) => setPriority(e.target.value)}
-            className="flex-1 px-3 py-2 text-sm rounded border border-[var(--color-surface-3)] bg-[var(--color-surface-0)] text-[var(--color-text-primary)]"
-          >
-            {ISSUE_PRIORITIES.map((p) => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-          </select>
+            Title <span className="text-[var(--color-status-red)]">*</span>
+          </label>
+          <input
+            id={titleId}
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Issue title"
+            className="w-full px-3 py-2 text-sm rounded border border-[var(--color-surface-3)] bg-[var(--color-surface-0)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-blue)]"
+            autoFocus
+          />
+          {errors.title && (
+            <p className="text-xs text-[var(--color-status-red)] mt-1">{errors.title}</p>
+          )}
         </div>
 
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Description (Markdown)"
-          rows={3}
-          className="w-full px-3 py-2 text-sm rounded border border-[var(--color-surface-3)] bg-[var(--color-surface-0)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-blue)] resize-none"
-        />
+        <div className="flex gap-2">
+          <div className="flex-1 flex flex-col">
+            <label
+              htmlFor={typeId}
+              className="text-xs text-[var(--color-text-tertiary)] mb-1 block"
+            >
+              Type <span className="text-[var(--color-status-red)]">*</span>
+            </label>
+            <select
+              id={typeId}
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              className="px-3 py-2 text-sm rounded border border-[var(--color-surface-3)] bg-[var(--color-surface-0)] text-[var(--color-text-primary)]"
+            >
+              {ISSUE_TYPES.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex-1 flex flex-col">
+            <label
+              htmlFor={priorityId}
+              className="text-xs text-[var(--color-text-tertiary)] mb-1 block"
+            >
+              Priority
+            </label>
+            <select
+              id={priorityId}
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+              className="px-3 py-2 text-sm rounded border border-[var(--color-surface-3)] bg-[var(--color-surface-0)] text-[var(--color-text-primary)]"
+            >
+              {ISSUE_PRIORITIES.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label
+            htmlFor={descId}
+            className="text-xs text-[var(--color-text-tertiary)] mb-1 block"
+          >
+            Description
+          </label>
+          <textarea
+            id={descId}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Description (Markdown)"
+            rows={3}
+            className="w-full px-3 py-2 text-sm rounded border border-[var(--color-surface-3)] bg-[var(--color-surface-0)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-blue)] resize-none"
+          />
+        </div>
 
         <div className="flex gap-2 justify-end">
           <button

@@ -146,6 +146,11 @@
 - Frontend isOwner derived from GET /projects list — works today because the endpoint filters by owner, but will need revision when Epic 8 ships shared projects
 - Regex-based 409 message parsing on the frontend (/Status has (\d+) issue/) is brittle to backend message format changes / i18n
 
+## Deferred from: code review of 9-8-field-labels-on-create-issue-form (2026-04-15)
+
+- Required form fields (Title, Type on create-issue; login/register email + password; project-settings) show a visual red `*` marker but carry no `aria-required` or HTML `required` attribute. Screen readers get no programmatic signal that the field is required. Fixing requires a consistent pattern decision — defer to a dedicated cross-form a11y pass (apps/web/src/components/create-issue-form.tsx)
+- Error `<p>` elements under form fields are not linked to their inputs via `aria-describedby`. When the field is focused, screen readers don't announce the visible validation error. Same pattern gap in login/register/project-settings forms. Fix alongside `aria-required` in the same a11y pass (apps/web/src/components/create-issue-form.tsx)
+
 ## Deferred from: code review of 9-6-edit-assignee-in-issue-detail (2026-04-15)
 
 - Click-to-edit wrappers on the issue-detail-panel (priority, title, description, assignee) are `<div onClick>` with no `role="button"`, `tabIndex`, or `onKeyDown` — keyboard-only users cannot enter edit mode. Pre-existing pattern across all inline-edit fields; fixing requires touching all four in one pass for consistency (apps/web/src/components/issue-detail-panel.tsx)
