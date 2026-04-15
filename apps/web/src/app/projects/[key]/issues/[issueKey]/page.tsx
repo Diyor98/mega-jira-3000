@@ -26,6 +26,7 @@ function IssueDetailPage() {
 
   const [issue, setIssue] = useState<IssueDetail | null>(null);
   const [users, setUsers] = useState<Array<{ id: string; email: string }>>([]);
+  const [statuses, setStatuses] = useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<'not-found' | 'forbidden' | 'other' | null>(null);
 
@@ -70,6 +71,29 @@ function IssueDetailPage() {
       });
   }, []);
 
+  // Story 9.7: load the project's workflow statuses so the Status field
+  // renders a name instead of a UUID slice. Fire-and-forget — if the
+  // fetch fails, the panel falls back to the UUID display. Uses the
+  // same `cancelled` flag pattern as the issue-fetch effect above so a
+  // late response from a previous projectKey can't overwrite state.
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .get<Array<{ id: string; name: string; position: number }>>(
+        `/projects/${projectKey}/statuses`,
+      )
+      .then((data) => {
+        if (cancelled) return;
+        if (data) setStatuses(data.map((s) => ({ id: s.id, name: s.name })));
+      })
+      .catch(() => {
+        /* silently fail — Status field will fall back to UUID slice */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectKey]);
+
   return (
     <div className="flex flex-col min-h-screen bg-[var(--color-surface-1)]">
       <div className="border-b border-[var(--color-surface-3)] bg-[var(--color-surface-0)]">
@@ -108,6 +132,7 @@ function IssueDetailPage() {
               projectKey={projectKey}
               issueId={issue.id}
               users={users}
+              statuses={statuses}
               hideCloseButton
               onClose={() => router.push(`/projects/${projectKey}`)}
               onDeleted={() => router.push(`/projects/${projectKey}`)}

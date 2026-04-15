@@ -1250,6 +1250,7 @@ export default function ProjectPage() {
             issueId={selectedIssueId}
             onClose={() => setSelectedIssueId(null)}
             users={users}
+            statuses={statuses}
             onDeleted={() => {
               setSelectedIssueId(null);
               loadData();

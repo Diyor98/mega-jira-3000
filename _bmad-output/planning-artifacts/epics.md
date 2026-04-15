@@ -590,6 +590,36 @@ As a **team member**, I want to **change an issue's assignee directly from the d
 
 **Files affected (informational, ~2 files):** `apps/web/src/components/issue-detail-panel.tsx` (replace the read-only block at lines 387–393 with the same click-to-edit pattern used for priority at lines 365–376; reuse the existing `users` prop and the `PATCH` helper). Optionally also update the assignee display from "first 8 chars of UUID" to "email prefix" in the same patch — same data shape.
 
+### Story 9.7: Human-Readable Status & Reporter in Issue Detail
+
+As a **user viewing an issue**, I want the **Status** and **Reporter** fields in the detail view to show the **workflow status name** and the **reporter's email prefix** instead of truncated UUIDs, So that I can understand at a glance which column the issue lives in and who reported it — without cross-referencing IDs.
+
+**Background:** Both fields have sat as read-only truncated UUIDs since Story 2.2:
+- `apps/web/src/components/issue-detail-panel.tsx:397` — `{issue.statusId.slice(0, 8)}...`
+- `apps/web/src/components/issue-detail-panel.tsx:453` — `{issue.reporterId.slice(0, 8)}...`
+
+The reporter fix is trivial: the `users` prop is already threaded into `<IssueDetailPanel>` (used for assignee, workflow-prompt, and now for assignee edit in Story 9.6). One lookup, same pattern as the new `assigneeDisplay` const at line 247.
+
+The status fix needs **one additional prop**: the project page (`apps/web/src/app/projects/[key]/page.tsx`) already owns a `statuses` array (`Array<{id: string; name: string; position: number}>`) that drives the board columns. It is NOT currently passed into `<IssueDetailPanel>`. Story 9.7 adds a new optional `statuses?: Status[]` prop and threads it through from both the modal usage at `page.tsx:1247` AND the dedicated permalink route at `app/projects/[key]/issues/[issueKey]/page.tsx`.
+
+**Acceptance Criteria:**
+
+**Given** I open an issue in the detail modal **Then** the Status field shows the workflow status name (e.g., "In Progress") in primary text style, not a truncated UUID **And** when the status lookup fails (stale or missing `statuses` prop), it falls back to the first 8 chars of the UUID so the page never crashes.
+
+**Given** I open an issue in the detail modal **Then** the Reporter field shows the email prefix of the reporter's address (e.g., `demo` for `demo@example.com`) in primary text style, not a truncated UUID **And** when the user lookup fails (stale or missing user), it falls back to the first 8 chars of the UUID.
+
+**Given** I navigate directly to `/projects/[key]/issues/[issueKey]` **Then** the dedicated permalink route ALSO shows status name and reporter email prefix — the dedicated route page must load both `users` AND `statuses` (new fetch) before rendering the panel's field grid.
+
+**Given** the `statuses` prop is not provided or has loaded lazily **Then** the Status field shows the UUID fallback in the read-only style — no crash, no empty string, no flicker. Same behavior for a missing `users` list on Reporter.
+
+**Given** Status and Reporter are **read-only** fields (per the existing comments at lines 393 and 451) **Then** neither field gains click-to-edit behavior in this story — only the display changes.
+
+**Files affected (informational, ~4 files):**
+- `apps/web/src/components/issue-detail-panel.tsx` — add `statuses?` prop, compute `statusDisplay` and `reporterDisplay` alongside the existing `assigneeDisplay`, replace the two `.slice(0, 8)` spans.
+- `apps/web/src/app/projects/[key]/page.tsx` — pass `statuses={statuses}` into the `<IssueDetailPanel>` mounted inside the modal.
+- `apps/web/src/app/projects/[key]/issues/[issueKey]/page.tsx` — fetch the project's `statuses` list alongside `users`, pass both into `<IssueDetailPanel>`.
+- (No API changes — the existing `GET /projects/:key/statuses` endpoint already returns the shape we need.)
+
 ### Story 9.4: CI/CD Pipeline Setup
 
 As a **DevOps engineer**, I want automated testing and deployment, So that code quality is enforced.

@@ -70,6 +70,13 @@ interface IssueDetailPanelProps {
   onDeleted?: () => void;
   users?: Array<{ id: string; email: string }>;
   /**
+   * Story 9.7: workflow statuses for the issue's project. Only id and
+   * name are needed — the detail panel doesn't care about position or
+   * ordering. Optional so existing callers keep compiling; when absent
+   * or missing an entry, the Status field falls back to the UUID slice.
+   */
+  statuses?: Array<{ id: string; name: string }>;
+  /**
    * When true, the header `×` close button is hidden. The dedicated
    * permalink route (`/projects/[key]/issues/[issueKey]`) sets this so
    * the page navigation chrome owns dismissal instead. Default false
@@ -78,7 +85,7 @@ interface IssueDetailPanelProps {
   hideCloseButton?: boolean;
 }
 
-export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted, users = [], hideCloseButton = false }: IssueDetailPanelProps) {
+export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted, users = [], statuses = [], hideCloseButton = false }: IssueDetailPanelProps) {
   const toast = useToast();
   const { can: canPerm } = useProjectPermissions(projectKey);
   const canEdit = canPerm('issue.edit');
@@ -258,6 +265,17 @@ export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted, user
   // only value be Unassigned — surprising and useless.
   const assigneeEditable = canEdit && users.length > 0;
   const sortedUsers = [...users].sort((a, b) => a.email.localeCompare(b.email));
+  // Story 9.7: render status and reporter by human-readable name instead
+  // of truncated UUID. Same find-then-fallback pattern as assigneeDisplay
+  // above — if the lookup misses (stale prop, deleted user, renamed
+  // status), fall back to the first 8 chars of the UUID so the page
+  // never crashes and the field never renders empty.
+  const statusDisplay =
+    statuses.find((s) => s.id === issue.statusId)?.name ??
+    `${issue.statusId.slice(0, 8)}...`;
+  const reporterDisplay =
+    users.find((u) => u.id === issue.reporterId)?.email.split('@')[0] ??
+    `${issue.reporterId.slice(0, 8)}...`;
   const createdDate = new Date(issue.createdAt).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
@@ -394,7 +412,7 @@ export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted, user
         <div>
           <p className="text-xs text-[var(--color-text-tertiary)] mb-1">Status</p>
           <span className="text-sm text-[var(--color-text-primary)]">
-            {issue.statusId.slice(0, 8)}...
+            {statusDisplay}
           </span>
         </div>
 
@@ -450,7 +468,7 @@ export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted, user
         <div>
           <p className="text-xs text-[var(--color-text-tertiary)] mb-1">Reporter</p>
           <span className="text-sm text-[var(--color-text-primary)]">
-            {issue.reporterId.slice(0, 8)}...
+            {reporterDisplay}
           </span>
         </div>
 
