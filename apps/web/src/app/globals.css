@@ -2,37 +2,37 @@
 
 @theme inline {
   /* Font */
-  --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
+  --font-sans: 'Segoe UI', var(--font-inter), system-ui, -apple-system, sans-serif;
 
-  /* Surface Colors */
-  --color-surface-0: #FFFFFF;
-  --color-surface-1: #F9FAFB;
-  --color-surface-2: #F3F4F6;
-  --color-surface-3: #E5E7EB;
+  /* Surface Colors — dark theme (Figma: Asana dark) */
+  --color-surface-0: #1E1F21;
+  --color-surface-1: #2A2B2D;
+  --color-surface-2: #353638;
+  --color-surface-3: #565557;
 
   /* Text Colors */
-  --color-text-primary: #111827;
-  --color-text-secondary: #6B7280;
-  --color-text-tertiary: #9CA3AF;
+  --color-text-primary: #F5F4F3;
+  --color-text-secondary: #A2A0A2;
+  --color-text-tertiary: #6D6E6F;
 
   /* Accent */
-  --color-accent-blue: #2563EB;
-  --color-accent-blue-dark: #1D4ED8;
+  --color-accent-blue: #4573D2;
+  --color-accent-blue-dark: #3A63B8;
 
   /* Status */
-  --color-status-green: #059669;
-  --color-status-yellow: #D97706;
-  --color-status-red: #DC2626;
+  --color-status-green: #5DA283;
+  --color-status-yellow: #F1BD6C;
+  --color-status-red: #F06A6A;
 
   /* Issue Types */
-  --color-issue-epic-bg: #EDE9FE;
-  --color-issue-epic-text: #6D28D9;
-  --color-issue-story-bg: #DBEAFE;
-  --color-issue-story-text: #1D4ED8;
-  --color-issue-task-bg: #D1FAE5;
-  --color-issue-task-text: #047857;
-  --color-issue-bug-bg: #FEE2E2;
-  --color-issue-bug-text: #B91C1C;
+  --color-issue-epic-bg: #5B3F8F;
+  --color-issue-epic-text: #E0D4F7;
+  --color-issue-story-bg: #3A63B8;
+  --color-issue-story-text: #C9DAFB;
+  --color-issue-task-bg: #5DA283;
+  --color-issue-task-text: #1E1F21;
+  --color-issue-bug-bg: #F06A6A;
+  --color-issue-bug-text: #1E1F21;
 
   /* Typography Scale */
   --text-tiny: 11px;
@@ -75,6 +75,13 @@ body {
 @keyframes reconnecting-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
+}
+
+/* Dark-theme overrides for elements that used hardcoded light colors */
+.dark-reconnect-banner {
+  background-color: rgba(241, 189, 108, 0.15);
+  border-color: rgba(241, 189, 108, 0.3);
+  color: #F1BD6C;
 }
 
 .animate-reconnecting {

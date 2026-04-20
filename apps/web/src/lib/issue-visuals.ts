@@ -13,10 +13,18 @@ export const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
 };
 
 export const PRIORITY_COLORS: Record<string, string> = {
-  P1: '#DC2626',
-  P2: '#D97706',
-  P3: '#2563EB',
-  P4: '#9CA3AF',
+  P1: '#F06A6A',
+  P2: '#F1BD6C',
+  P3: '#5DA283',
+  P4: '#6D6E6F',
+};
+
+/** Pill-style priority chips matching the Figma Asana dark theme. */
+export const PRIORITY_PILLS: Record<string, { bg: string; text: string; label: string }> = {
+  P1: { bg: '#F06A6A', text: '#1E1F21', label: 'High' },
+  P2: { bg: '#F1BD6C', text: '#1E1F21', label: 'Medium' },
+  P3: { bg: '#5DA283', text: '#1E1F21', label: 'Low' },
+  P4: { bg: '#6D6E6F', text: '#FFFFFF', label: 'None' },
 };
 
 export const TYPE_ORDER: Record<string, number> = {

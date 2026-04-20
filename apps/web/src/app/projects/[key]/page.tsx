@@ -27,7 +27,7 @@ import { FilterBar, EMPTY_FILTER, hasAnyFilter, type FilterValue, type FilterPre
 import { NotificationBell } from '../../../components/notification-bell';
 import { ToastProvider } from '../../../components/toast';
 import { PENDING_OPEN_ISSUE_KEY } from '../../../lib/palette-actions';
-import { TYPE_COLORS, PRIORITY_COLORS } from '../../../lib/issue-visuals';
+import { TYPE_COLORS, PRIORITY_COLORS, PRIORITY_PILLS } from '../../../lib/issue-visuals';
 import { ViewToggle, type ViewMode } from '../../../components/view-toggle';
 import { IssueListView } from '../../../components/issue-list-view';
 
@@ -113,7 +113,7 @@ function DraggableIssueCard({ issue, onClick, epicProgress, isPulsing, isFocused
         // Only open detail if not dragging
         if (!isDragging) onClick();
       }}
-      className={`p-2 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-3)] hover:border-[var(--color-accent-blue)] transition-colors cursor-grab active:cursor-grabbing ${isDragging ? 'opacity-30' : 'transition-transform duration-200 ease-out'} ${isPulsing ? 'animate-remote-pulse' : ''} ${isFocused ? 'ring-2 ring-[var(--color-accent-blue)] ring-offset-1' : ''}`}
+      className={`px-4 py-[18px] rounded-lg bg-[var(--color-surface-1)] border border-[var(--color-surface-3)] hover:border-[var(--color-accent-blue)] transition-colors cursor-grab active:cursor-grabbing ${isDragging ? 'opacity-30' : 'transition-transform duration-200 ease-out'} ${isPulsing ? 'animate-remote-pulse' : ''} ${isFocused ? 'ring-2 ring-[var(--color-accent-blue)] ring-offset-1 ring-offset-[var(--color-surface-0)]' : ''}`}
     >
       <IssueCardContent issue={issue} epicProgress={epicProgress} />
     </div>
@@ -123,56 +123,59 @@ function DraggableIssueCard({ issue, onClick, epicProgress, isPulsing, isFocused
 // Pure display card (used in card and drag overlay)
 function IssueCardContent({ issue, epicProgress }: { issue: Issue; epicProgress?: number }) {
   const typeColor = TYPE_COLORS[issue.type] ?? TYPE_COLORS.task;
-  const priorityColor = PRIORITY_COLORS[issue.priority] ?? PRIORITY_COLORS.P3;
+  const priorityPill = PRIORITY_PILLS[issue.priority] ?? PRIORITY_PILLS.P3;
 
   return (
-    <>
-      <div className="flex items-center gap-1.5 mb-1">
+    <div className="flex flex-col gap-3">
+      {/* Title row */}
+      <div className="flex items-center gap-1.5">
         <span
           className="text-[10px] font-medium px-1.5 py-0.5 rounded"
           style={{ backgroundColor: typeColor.bg, color: typeColor.text }}
         >
           {issue.type.charAt(0).toUpperCase() + issue.type.slice(1)}
         </span>
-        <span className="text-xs text-[var(--color-text-tertiary)]">
+        <p className="text-sm text-[var(--color-text-primary)] truncate flex-1">
+          {issue.title}
+        </p>
+      </div>
+      {/* Priority + issue key pills */}
+      <div className="flex items-center gap-2">
+        <span
+          className="text-xs px-2 py-0.5 rounded-[10px] font-normal leading-[18px]"
+          style={{ backgroundColor: priorityPill.bg, color: priorityPill.text }}
+        >
+          {priorityPill.label}
+        </span>
+        <span className="text-xs px-2 py-0.5 rounded-[10px] bg-[var(--color-text-tertiary)] text-white leading-[18px]">
           {issue.issueKey}
         </span>
       </div>
-      <p className="text-sm text-[var(--color-text-primary)] line-clamp-2">
-        {issue.title}
-      </p>
-      <div className="hidden lg:flex items-center gap-1 mt-1.5">
-        <span
-          className="w-2 h-2 rounded-full inline-block"
-          style={{ backgroundColor: priorityColor }}
-        />
-        <span className="text-[10px] text-[var(--color-text-tertiary)]">
-          {issue.priority}
-        </span>
-      </div>
+      {/* Epic progress bar */}
       {issue.type === 'epic' && epicProgress !== undefined && (
-        <div className="flex items-center gap-1.5 mt-1.5">
+        <div className="flex items-center gap-1.5">
           <div className="flex-1 h-1 rounded-full bg-[var(--color-surface-3)]">
             <div
               className="h-1 rounded-full bg-[var(--color-accent-blue)] transition-all duration-300"
               style={{ width: `${epicProgress}%` }}
             />
           </div>
-          <span className="text-[10px] text-[var(--color-text-tertiary)]">
+          <span className="text-[10px] text-[var(--color-text-secondary)]">
             {epicProgress}%
           </span>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
 // Droppable column
-function DroppableColumn({ status, children, isOver, issueCount }: {
+function DroppableColumn({ status, children, isOver, issueCount, onAddClick }: {
   status: Status;
   children: React.ReactNode;
   isOver: boolean;
   issueCount: number;
+  onAddClick?: () => void;
 }) {
   const { setNodeRef } = useDroppable({ id: status.id });
 
@@ -181,23 +184,35 @@ function DroppableColumn({ status, children, isOver, issueCount }: {
       ref={setNodeRef}
       role="row"
       aria-label={`${status.name} column`}
-      className={`flex-shrink-0 w-[240px] lg:w-[280px] rounded flex flex-col transition-colors duration-150 ${
+      className={`flex-shrink-0 w-[240px] lg:w-[280px] rounded-lg flex flex-col transition-colors duration-150 px-3 ${
         isOver
-          ? 'bg-[var(--color-accent-blue)]/5 border-2 border-[var(--color-accent-blue)]'
-          : 'bg-[var(--color-surface-1)] border border-[var(--color-surface-3)]'
+          ? 'bg-[var(--color-accent-blue)]/10 ring-2 ring-[var(--color-accent-blue)]'
+          : ''
       }`}
     >
-      <div className="px-3 py-2 border-b border-[var(--color-surface-3)] flex items-center justify-between sticky top-0 bg-[var(--color-surface-1)] z-10 rounded-t">
-        <h2 className="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
+      <div className="h-9 flex items-center justify-between sticky top-0 z-10 mb-1.5">
+        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
           {status.name}
         </h2>
-        <span className="text-xs text-[var(--color-text-tertiary)]">
-          {issueCount}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-[var(--color-text-tertiary)]">
+            {issueCount}
+          </span>
+        </div>
       </div>
-      <div className="p-2 flex-1 flex flex-col gap-1.5 min-h-[120px]">
+      <div className="flex-1 flex flex-col gap-2 min-h-[120px]">
         {children}
       </div>
+      {onAddClick && (
+        <button
+          type="button"
+          onClick={onAddClick}
+          className="flex items-center justify-center gap-2 h-9 w-full mt-2 text-sm font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors rounded"
+        >
+          <span className="text-xs">+</span>
+          Add task
+        </button>
+      )}
     </div>
   );
 }
@@ -1059,7 +1074,7 @@ export default function ProjectPage() {
       <div className="flex flex-1 items-center justify-center">
         <div className="flex gap-2 overflow-x-auto p-6">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="flex-shrink-0 w-56 h-64 rounded bg-[var(--color-surface-1)] border border-[var(--color-surface-3)] animate-pulse" />
+            <div key={i} className="flex-shrink-0 w-[280px] h-64 rounded-lg bg-[var(--color-surface-1)] border border-[var(--color-surface-3)] animate-pulse" />
           ))}
         </div>
       </div>
@@ -1098,7 +1113,7 @@ export default function ProjectPage() {
       </div>
 
       {isReconnecting && (
-        <div className="mb-3 px-3 py-2 rounded bg-amber-50 border border-amber-200 text-amber-800 text-sm animate-reconnecting">
+        <div className="mb-3 px-3 py-2 rounded bg-[rgba(241,189,108,0.15)] border border-[rgba(241,189,108,0.3)] text-[#F1BD6C] text-sm animate-reconnecting">
           Reconnecting... Board updates may be delayed
         </div>
       )}
@@ -1202,9 +1217,10 @@ export default function ProjectPage() {
                 status={status}
                 isOver={overColumnId === status.id}
                 issueCount={columnIssues.filter((i) => i.id !== activeIssue?.id).length}
+                onAddClick={canCreateIssue ? () => setShowCreateForm(true) : undefined}
               >
                 {columnIssues.length === 0 ? (
-                  <div className="flex-1 flex items-center justify-center border-2 border-dashed border-[var(--color-surface-3)] rounded m-1 min-h-[80px]">
+                  <div className="flex-1 flex items-center justify-center border-2 border-dashed border-[var(--color-surface-3)] rounded-lg min-h-[80px]">
                     <p className="text-xs text-[var(--color-text-tertiary)]">No issues</p>
                   </div>
                 ) : (
@@ -1229,7 +1245,7 @@ export default function ProjectPage() {
 
         <DragOverlay>
           {activeIssue && (
-            <div className="p-2 rounded bg-[var(--color-surface-0)] border-2 border-[var(--color-accent-blue)] shadow-lg w-56 scale-[1.02]">
+            <div className="px-4 py-[18px] rounded-lg bg-[var(--color-surface-1)] border-2 border-[var(--color-accent-blue)] shadow-lg w-[280px] scale-[1.02]">
               <IssueCardContent
                 issue={activeIssue}
                 epicProgress={activeIssue.type === 'epic' ? epicProgress[activeIssue.id] : undefined}
