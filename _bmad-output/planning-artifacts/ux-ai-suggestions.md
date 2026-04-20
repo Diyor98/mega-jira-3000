@@ -142,7 +142,7 @@ Expanded Step 6 design tokens into complete visual foundation:
 - Full semantic color map (11 surface/text/accent tokens) + issue type badge colors (Epic violet, Story blue, Task green, Bug red) + priority indicator colors (P1-P4)
 - Typography system: Inter font, 6-level type scale from 11px (tiny) to 18px (page title), tight line heights for density
 - Spacing: 4px base unit, defined scale from space-1 (4px) to space-8 (32px)
-- Three-panel layout grid: 240px sidebar (collapsible to 48px) + fluid content + 480px detail panel (on demand)
+- Three-panel layout grid: 288px sidebar (always expanded on desktop) + fluid content + 480px detail panel (on demand)
 - Board column spec: equal width, min 200px, max ~6 before scroll, sticky headers
 - Accessibility: all combos meet 4.5:1 contrast, 32px min click targets, focus indicators, high contrast mode
 

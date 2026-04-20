@@ -80,7 +80,7 @@ The implementation owns these rows of `ux-design-specification.md:652–665`:
 ### AC6 — `[` — Toggle sidebar / drawer
 
 16. `[` (outside any typing target) toggles the drawer open/closed at viewports below `lg` (<1024px). This mirrors the existing hamburger-button behavior.
-17. At `lg` and above, the sidebar is always visible (`lg:!translate-x-0` in `root-layout-shell.tsx`), so `[` is a visible no-op at those widths. Do NOT add a secondary "collapse to 48px" toggle — that state is CSS-driven at `1024–1439px` via `lg:w-12` and the responsive `hidden lg:block` tricks in `sidebar.tsx`, and adding a JS toggle would fight the CSS. Document this explicitly in Dev Agent Record.
+17. At `lg` and above, the sidebar is always visible and fully expanded at 288px (`lg:!translate-x-0` in `root-layout-shell.tsx`), so `[` is a visible no-op at those widths. The sidebar no longer collapses to icon-only mode at any desktop breakpoint.
 
 ### AC7 — Board focus model (new)
 

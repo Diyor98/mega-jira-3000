@@ -395,7 +395,7 @@ Body (14px) is the universal default. No 18px+ except page titles. Tight line he
 └──────────┴─────────────────────────────────┴──────────────┘
 ```
 
-- Sidebar: 240px fixed, collapsible to 48px icons-only
+- Sidebar: 288px fixed, always expanded on desktop (no icon-only collapse)
 - Content: fluid, board columns distribute evenly (min 200px, max ~6 before scroll)
 - Detail panel: 480px, slides from right on issue click, overlays content
 - Minimum viewport: 1024px
@@ -673,16 +673,15 @@ Desktop-first. Power-user productivity tool, not consumer app.
 
 | Tier | Viewport | Support | Layout |
 |------|----------|---------|--------|
-| Desktop (primary) | 1440px+ | Full | Three-panel: sidebar + board + detail |
-| Desktop (compact) | 1024-1439px | Full, adjusted | Sidebar collapses to icons. Detail overlays. |
-| Tablet landscape | 768-1023px | Functional | Sidebar hidden. Board scrollable. Detail full-width overlay. |
+| Desktop | 1024px+ | Full | Three-panel: sidebar (288px, always expanded) + board + detail |
+| Tablet landscape | 768-1023px | Functional | Sidebar hidden (hamburger drawer). Board scrollable. Detail full-width overlay. |
 | Mobile | < 768px | Deferred | "Desktop recommended" banner |
 
 ### Breakpoint Behaviors
 
 | Element | 1440px+ | 1024-1439px | 768-1023px |
 |---------|---------|-------------|------------|
-| Sidebar | 240px expanded | 48px icons | Hidden (hamburger) |
+| Sidebar | 288px expanded | 288px expanded | Hidden (hamburger) |
 | Board columns | 6 visible | 4-5 + scroll | 2-3 + scroll |
 | Detail modal | Centered ~960px (max-w-3xl) | Centered ~720px | Full-screen sheet |
 | Filter bar | Horizontal chips | Scrollable chips | Collapsed button |

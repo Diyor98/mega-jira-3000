@@ -128,7 +128,7 @@ This document provides the complete epic and story breakdown for Mega Jira 3000,
 - UX-DR11: Implement empty state pattern (CTAs in empty boards/columns, field hints in empty panels)
 - UX-DR12: Implement toast notification system (success auto-dismiss 3s, error persist with recovery action)
 - UX-DR13: Implement WCAG 2.1 AA baseline (2px focus indicators, ARIA labels, semantic HTML, screen reader announcements)
-- UX-DR14: Implement responsive breakpoints (1440+ full, 1024-1439 compact sidebar, 768-1023 hidden sidebar)
+- UX-DR14: Implement responsive breakpoints (1024+ full 288px sidebar, 768-1023 hidden sidebar with hamburger drawer)
 
 ### FR Coverage Map
 
@@ -506,11 +506,9 @@ As a **user**, I want the layout to adapt to screen size, So that I can use the 
 
 **Acceptance Criteria:**
 
-**Given** 1440px+ **Then** 240px sidebar, 6 columns, 480px detail per UX-DR14
+**Given** 1024px+ **Then** 288px sidebar (always expanded), board columns, detail modal per UX-DR14
 
-**Given** 1024-1439px **Then** 48px icon sidebar, 400px detail
-
-**Given** 768-1023px **Then** sidebar hidden, full-width detail overlay
+**Given** 768-1023px **Then** sidebar hidden (hamburger drawer), full-width detail overlay
 
 ## Epic 9: Power User Experience
 

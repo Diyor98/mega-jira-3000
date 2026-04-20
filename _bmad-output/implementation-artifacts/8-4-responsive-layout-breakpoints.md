@@ -24,10 +24,11 @@ This is the **last story in Epic 8** and closes Epic 8 entirely.
 
 ### AC1 — Sidebar responsive behavior (UX §Breakpoint Behaviors)
 
-1. **≥1440px:** Sidebar expanded at **240px** (`w-60`) with project key + project name visible. Currently `w-56` (224px) — bump to `w-60`.
-2. **1024–1439px:** Sidebar collapses to **48px icon-only rail** (`w-12`). Each project link shows only the project key (truncated to 3 chars if longer) with the full name in a `title` attribute tooltip. The "+ New Project" link collapses to a `+` icon with tooltip.
-3. **768–1023px:** Sidebar is **hidden by default**. A **hamburger button** in the top-left of `main` opens the sidebar as a **left drawer overlay** (full height, 240px wide, with backdrop). Clicking backdrop or pressing Esc closes it. On route change the drawer auto-closes.
-4. **<768px:** No sidebar, no hamburger. A persistent top banner reads **"Desktop recommended — Mega Jira is optimized for 1024px+ screens"** with dismiss button. `localStorage` remembers the dismissal.
+1. **≥1024px:** Sidebar always expanded at **288px** (`w-72`) with colored project key badge + full project name visible. Dark themed (`#2E2E30` bg, `#565557` border). No icon-only collapse — the sidebar is always fully expanded on desktop.
+2. **768–1023px:** Sidebar is **hidden by default**. A **hamburger button** in the top-left of `main` opens the sidebar as a **left drawer overlay** (full height, 288px wide, with backdrop). Clicking backdrop or pressing Esc closes it. On route change the drawer auto-closes.
+3. **<768px:** No sidebar, no hamburger. A persistent top banner reads **"Desktop recommended — Mega Jira is optimized for 1024px+ screens"** with dismiss button. `localStorage` remembers the dismissal.
+
+> **Note (2026-04-21):** The original 48px icon-only collapse at 1024–1439px was removed. Project keys like P1, P2 etc. were indistinguishable in icon-only mode (all showed "P"). The sidebar now stays fully expanded at all desktop sizes (≥1024px) for better usability.
 
 **Implementation detail:** Use Tailwind breakpoints directly in className — do NOT introduce a `useMediaQuery` hook for static layout decisions. The hamburger drawer state is client-side React state; that's fine.
 
