@@ -51,7 +51,7 @@ export function Sidebar() {
   const activeProjectKey = pathname.match(/^\/projects\/([^/]+)/)?.[1];
 
   return (
-    <aside className="h-full w-60 min-[1440px]:w-60 lg:w-12 flex-shrink-0 bg-[#2E2E30] border-r border-[#565557] flex flex-col">
+    <aside className="h-full w-72 min-[1440px]:w-72 lg:w-12 flex-shrink-0 bg-[#2E2E30] border-r border-[#565557] flex flex-col">
       {/* Top section */}
       <div className="flex flex-col gap-2 p-4 lg:p-2 min-[1440px]:p-4">
         {/* Create issue button — dispatches the same event as Cmd+N */}
@@ -142,10 +142,10 @@ export function Sidebar() {
                 }`}
               >
                 <span
-                  className="flex items-center justify-center w-5 h-5 rounded-[6px] shrink-0 text-[10px] font-bold text-[#1E1F21]"
+                  className="flex items-center justify-center min-w-[24px] h-5 px-1 rounded-[6px] shrink-0 text-[10px] font-bold text-[#1E1F21]"
                   style={{ backgroundColor: color }}
                 >
-                  {project.key.charAt(0)}
+                  {project.key}
                 </span>
                 <span className="truncate lg:hidden min-[1440px]:inline">{project.name}</span>
               </Link>
