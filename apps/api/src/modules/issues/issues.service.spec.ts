@@ -27,7 +27,7 @@ describe('IssuesService', () => {
   const mockWorkflow = { id: 'workflow-id' };
   const mockStatus = { id: 'status-id' };
   const userId = 'user-id-123';
-  const validDto = { title: 'Fix login bug', type: 'Bug' as const };
+  const validDto = { title: 'Fix login bug', type: 'Bug' as const, priority: 'medium' as const };
 
   function setupProjectLookup(project: unknown | null) {
     // Each select call needs its own chain
@@ -116,7 +116,7 @@ describe('IssuesService', () => {
       title: 'Fix login bug',
       description: null,
       type: 'bug',
-      priority: 'P3',
+      priority: 'medium',
       statusId: 'status-id',
       assigneeId: null,
       reporterId: 'user-id-123',
@@ -135,14 +135,14 @@ describe('IssuesService', () => {
       expect(mockDb.transaction).toHaveBeenCalled();
     });
 
-    it('defaults priority to P3 when not provided', async () => {
+    it('defaults priority to medium when not provided', async () => {
       setupProjectLookup(mockProject);
       const mockTx = setupCreateTransaction(mockIssue);
 
-      await service.create({ title: 'Test', type: 'Story' }, userId, 'MEGA');
+      await service.create({ title: 'Test', type: 'Story' } as any, userId, 'MEGA');
 
       const insertValues = mockTx.insert.mock.results[0].value.values.mock.calls[0][0];
-      expect(insertValues.priority).toBe('P3');
+      expect(insertValues.priority).toBe('medium');
     });
 
     it('defaults status to first workflow status', async () => {
@@ -163,13 +163,13 @@ describe('IssuesService', () => {
 
     it('throws BadRequestException for missing title', async () => {
       await expect(
-        service.create({ title: '', type: 'Story' }, userId, 'MEGA'),
+        service.create({ title: '', type: 'Story' } as any, userId, 'MEGA'),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('throws BadRequestException for invalid type', async () => {
       await expect(
-        service.create({ title: 'Test', type: 'InvalidType' as any }, userId, 'MEGA'),
+        service.create({ title: 'Test', type: 'InvalidType' } as any, userId, 'MEGA'),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -213,7 +213,7 @@ describe('IssuesService', () => {
   describe('findByProject', () => {
     it('returns issues for project', async () => {
       const mockIssues = [
-        { id: '1', issueKey: 'MEGA-1', title: 'Issue 1', type: 'story', priority: 'P3', statusId: 's1', assigneeId: null, reporterId: 'u1', issueVersion: 1, createdAt: new Date(), description: null },
+        { id: '1', issueKey: 'MEGA-1', title: 'Issue 1', type: 'story', priority: 'medium', statusId: 's1', assigneeId: null, reporterId: 'u1', issueVersion: 1, createdAt: new Date(), description: null },
       ];
 
       let selectCallCount = 0;
@@ -361,9 +361,9 @@ describe('IssuesService', () => {
       expect(whereSpy).toHaveBeenCalled();
     });
 
-    it('priority=P1,P2 → two-value enum filter', async () => {
+    it('priority=critical,high → two-value enum filter', async () => {
       const whereSpy = setupFilterMocks([]);
-      await service.findByProject('MEGA', { priority: 'P1,P2' });
+      await service.findByProject('MEGA', { priority: 'critical,high' });
       expect(whereSpy).toHaveBeenCalled();
     });
 
@@ -380,7 +380,7 @@ describe('IssuesService', () => {
       const whereSpy = setupFilterMocks([]);
       await service.findByProject('MEGA', {
         statusId: uuidA,
-        priority: 'P1',
+        priority: 'critical',
         createdFrom: '2026-04-01',
       });
       expect(whereSpy).toHaveBeenCalled();
@@ -415,7 +415,7 @@ describe('IssuesService', () => {
       title: 'Fix bug',
       description: 'Some description',
       type: 'bug',
-      priority: 'P1',
+      priority: 'critical',
       statusId: 'status-id',
       assigneeId: null,
       reporterId: 'user-1',
@@ -497,7 +497,7 @@ describe('IssuesService', () => {
       title: 'Fix bug',
       description: 'Some description',
       type: 'bug',
-      priority: 'P1',
+      priority: 'critical',
       statusId: 'status-id',
       assigneeId: null,
       reporterId: 'user-1',
@@ -581,7 +581,7 @@ describe('IssuesService', () => {
       title: 'Updated title',
       description: null,
       type: 'bug',
-      priority: 'P2',
+      priority: 'high',
       statusId: 'status-id',
       assigneeId: null,
       reporterId: 'user-1',
@@ -698,7 +698,7 @@ describe('IssuesService', () => {
 
       await service.update('MEGA', 'issue-id', {
         title: 'Updated',
-        priority: 'P2',
+        priority: 'high',
         issueVersion: 1,
       }, userId);
 
@@ -1323,7 +1323,7 @@ describe('IssuesService', () => {
   });
 
   describe('create with parentId', () => {
-    const validDto = { title: 'Child Story', type: 'Story' as const, parentId: '00000000-0000-0000-0000-000000000001' };
+    const validDto = { title: 'Child Story', type: 'Story' as const, priority: 'medium' as const, parentId: '00000000-0000-0000-0000-000000000001' };
     const mockEpicParent = { id: '00000000-0000-0000-0000-000000000001', type: 'epic', projectId: 'project-id' };
 
     it('creates child issue when parent is Epic', async () => {
@@ -1361,7 +1361,7 @@ describe('IssuesService', () => {
     });
 
     it('throws BadRequestException when child type is Epic', async () => {
-      const epicChildDto = { title: 'Sub Epic', type: 'Epic' as const, parentId: '00000000-0000-0000-0000-000000000001' };
+      const epicChildDto = { title: 'Sub Epic', type: 'Epic' as const, priority: 'medium' as const, parentId: '00000000-0000-0000-0000-000000000001' };
 
       let selectCallCount = 0;
       mockDb.select.mockImplementation(() => {
@@ -1391,7 +1391,7 @@ describe('IssuesService', () => {
   describe('findChildren', () => {
     it('returns child issues', async () => {
       const mockChildren = [
-        { id: 'c1', issueKey: 'MEGA-2', title: 'Child 1', type: 'story', priority: 'P3', statusId: 's1' },
+        { id: 'c1', issueKey: 'MEGA-2', title: 'Child 1', type: 'story', priority: 'medium', statusId: 's1' },
       ];
       let selectCallCount = 0;
       mockDb.select.mockImplementation(() => {
@@ -1510,7 +1510,7 @@ describe('IssuesService', () => {
           }),
         };
         // 4: Resolve linked issue
-        return { from: jest.fn().mockReturnValue({ where: jest.fn().mockReturnValue({ limit: jest.fn().mockResolvedValue([{ id: '00000000-0000-0000-0000-000000000020', issueKey: 'MEGA-2', title: 'Other', type: 'story', priority: 'P3', statusId: 's1' }]) }) }) };
+        return { from: jest.fn().mockReturnValue({ where: jest.fn().mockReturnValue({ limit: jest.fn().mockResolvedValue([{ id: '00000000-0000-0000-0000-000000000020', issueKey: 'MEGA-2', title: 'Other', type: 'story', priority: 'medium', statusId: 's1' }]) }) }) };
       });
 
       const result = await service.getLinks('MEGA', issueId);
@@ -1540,7 +1540,7 @@ describe('IssuesService', () => {
       const mockTx = { update: jest.fn(), insert: jest.fn() };
       mockTx.update.mockReturnValue({ set: jest.fn().mockReturnValue({ where: jest.fn().mockReturnValue({ returning: jest.fn().mockResolvedValue([{ nextSequence: 2 }]) }) }) });
       mockTx.insert.mockReturnValue({ values: jest.fn().mockReturnValue({ returning: jest.fn().mockResolvedValue([{
-        id: 'bug-id', issueKey: 'MEGA-2', title: 'Bug title', type: 'bug', priority: 'P3',
+        id: 'bug-id', issueKey: 'MEGA-2', title: 'Bug title', type: 'bug', priority: 'medium',
         statusId: 'status-id', assigneeId: null, reporterId: userId, parentId: null, issueVersion: 1, createdAt: new Date(),
       }]) }) });
       mockDb.transaction.mockImplementation((cb) => cb(mockTx));
@@ -1576,7 +1576,7 @@ describe('IssuesService', () => {
       issueKey: 'MEGA-1',
       title: 'To delete',
       type: 'story',
-      priority: 'P3',
+      priority: 'medium',
       issueVersion: 2,
       deletedAt: new Date(),
     };
@@ -1745,7 +1745,7 @@ describe('IssuesService', () => {
         issueKey: 'MEGA-1',
         title: 'Fix login bug',
         type: 'bug',
-        priority: 'P3',
+        priority: 'medium',
         statusId: 'status-id',
         assigneeId: null,
         reporterId: userId,
@@ -1778,7 +1778,7 @@ describe('IssuesService', () => {
         issueVersion: 2,
         description: null,
         type: 'bug',
-        priority: 'P3',
+        priority: 'medium',
         assigneeId: null,
         reporterId: userId,
         parentId: null,
@@ -1877,7 +1877,7 @@ describe('IssuesService', () => {
         issueVersion: 2,
         description: null,
         type: 'bug',
-        priority: 'P3',
+        priority: 'medium',
         assigneeId: null,
         reporterId: userId,
         parentId: null,
@@ -1921,7 +1921,7 @@ describe('IssuesService', () => {
         issueKey: 'MEGA-1',
         title: 'Test',
         type: 'bug',
-        priority: 'P3',
+        priority: 'medium',
         issueVersion: 2,
         deletedAt: new Date(),
       };

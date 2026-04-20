@@ -4,7 +4,7 @@ import { workflowStatuses } from './workflow-statuses';
 import { users } from './users';
 
 export const issueTypeEnum = pgEnum('issue_type', ['epic', 'story', 'task', 'bug']);
-export const issuePriorityEnum = pgEnum('issue_priority', ['P1', 'P2', 'P3', 'P4']);
+export const issuePriorityEnum = pgEnum('issue_priority', ['critical', 'high', 'medium', 'low']);
 
 export const issues = pgTable(
   'issues',
@@ -15,7 +15,7 @@ export const issues = pgTable(
     title: varchar('title', { length: 255 }).notNull(),
     description: text('description'),
     type: issueTypeEnum('type').notNull(),
-    priority: issuePriorityEnum('priority').notNull().default('P3'),
+    priority: issuePriorityEnum('priority').notNull().default('medium'),
     statusId: uuid('status_id').notNull().references(() => workflowStatuses.id),
     assigneeId: uuid('assignee_id').references(() => users.id),
     reporterId: uuid('reporter_id').notNull().references(() => users.id),

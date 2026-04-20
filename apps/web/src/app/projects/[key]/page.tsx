@@ -123,7 +123,7 @@ function DraggableIssueCard({ issue, onClick, epicProgress, isPulsing, isFocused
 // Pure display card (used in card and drag overlay)
 function IssueCardContent({ issue, epicProgress }: { issue: Issue; epicProgress?: number }) {
   const typeColor = TYPE_COLORS[issue.type] ?? TYPE_COLORS.task;
-  const priorityPill = PRIORITY_PILLS[issue.priority] ?? PRIORITY_PILLS.P3;
+  const priorityPill = PRIORITY_PILLS[issue.priority] ?? PRIORITY_PILLS.medium;
 
   return (
     <div className="flex flex-col gap-3">

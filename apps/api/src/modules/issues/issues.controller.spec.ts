@@ -19,13 +19,13 @@ describe('IssuesController', () => {
 
   describe('POST /api/v1/projects/:projectKey/issues', () => {
     it('calls service.create with body, userId, and projectKey', async () => {
-      const dto = { title: 'Fix bug', type: 'Bug' as const };
+      const dto = { title: 'Fix bug', type: 'Bug' as const, priority: 'medium' as const };
       const expectedIssue = {
         id: 'issue-id',
         issueKey: 'MEGA-1',
         title: 'Fix bug',
         type: 'bug',
-        priority: 'P3',
+        priority: 'medium',
         statusId: 'status-id',
         reporterId: 'user-id',
         issueVersion: 1,

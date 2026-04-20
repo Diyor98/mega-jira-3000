@@ -68,7 +68,7 @@ Mega Jira 3000 reduces developer tool fatigue, improves velocity by an estimated
 
 - **Developer Velocity (GA):** 15% improvement measured by reduced context-switching time
 - **Enterprise Adoption (Beta):** 5 enterprise clients onboarded during Beta (Month 5), public GA by Month 7
-- **Quality at Launch (GA):** < 2% critical P1 bugs in production within 30 days of GA
+- **Quality at Launch (GA):** < 2% critical-priority bugs in production within 30 days of GA
 - **Retention (GA):** > 90% enterprise client retention after first 6 months post-GA
 
 ### Technical Success
@@ -87,7 +87,7 @@ Mega Jira 3000 reduces developer tool fatigue, improves velocity by an estimated
 | DAU/MAU | > 75% | Monthly from GA |
 | SUS Score | > 80 | Beta exit survey |
 | TTFV | < 15 min | Beta onboarding tracking |
-| Defect Escape Rate | < 2% P1 | 30 days post-GA |
+| Defect Escape Rate | < 2% critical | 30 days post-GA |
 | CSAT (task findability) | > 4.5/5 | In-app prompt, weekly |
 
 ## User Journeys
@@ -126,9 +126,9 @@ Mega Jira 3000 reduces developer tool fatigue, improves velocity by an estimated
 
 **Rising Action:** She discovers an edge case — input exceeding 500 characters breaks the feature. She clicks "Create Bug" from within the story; the bug auto-links to MEGA-55 with Epic context preserved.
 
-**Climax:** Quinn fills in bug details with severity P2 and selects "Root Cause: Input Validation" — a mandatory field enforced by the workflow. This data feeds quality metrics dashboards.
+**Climax:** Quinn fills in bug details with severity high and selects "Root Cause: Input Validation" — a mandatory field enforced by the workflow. This data feeds quality metrics dashboards.
 
-**Resolution:** The bug appears on the board instantly. Marcus picks it up in real-time. The SLA clock starts — P2 bugs escalate after 24 hours if untouched.
+**Resolution:** The bug appears on the board instantly. Marcus picks it up in real-time. The SLA clock starts — high-priority bugs escalate after 24 hours if untouched.
 
 ### Journey 4: The Observer — "VP Chen Gets Answers Without Asking"
 
@@ -281,7 +281,7 @@ Mega Jira 3000 is a B2B SaaS platform targeting enterprise engineering organizat
 - MJQL with AND/OR operators, `=`, `!=`, `IN`, `NOT IN`, `~` (contains)
 - Elasticsearch integration via CDC for full-text search
 - Email notifications batched every 15 minutes
-- SLA engine with P1/P2 auto-escalation rules
+- SLA engine with critical/high auto-escalation rules
 - WIP limits on board columns with visual indicators
 - Custom mandatory fields on workflow transitions (e.g., Root Cause for Bugs)
 - Bulk operations (up to 500 issues) with async queue processing

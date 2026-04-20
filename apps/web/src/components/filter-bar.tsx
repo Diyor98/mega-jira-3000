@@ -37,7 +37,12 @@ const TYPE_OPTIONS = [
   { value: 'task', label: 'Task' },
   { value: 'bug', label: 'Bug' },
 ];
-const PRIORITY_OPTIONS = ['P1', 'P2', 'P3', 'P4'];
+const PRIORITY_OPTIONS = [
+  { value: 'critical', label: 'Critical' },
+  { value: 'high', label: 'High' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'low', label: 'Low' },
+];
 
 export interface FilterPreset {
   id: string;
@@ -355,11 +360,11 @@ export function FilterBar({
       >
         {PRIORITY_OPTIONS.map((p) => (
           <OptionCheckbox
-            key={p}
-            label={p}
-            checked={value.priorities.includes(p)}
+            key={p.value}
+            label={p.label}
+            checked={value.priorities.includes(p.value)}
             onChange={() =>
-              onChange({ ...value, priorities: toggleInArray(value.priorities, p) })
+              onChange({ ...value, priorities: toggleInArray(value.priorities, p.value) })
             }
           />
         ))}

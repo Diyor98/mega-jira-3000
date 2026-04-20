@@ -26,7 +26,7 @@ export function CreateIssueForm({ projectKey, onCreated, onCancel }: CreateIssue
   const descId = `${baseId}-desc`;
   const [title, setTitle] = useState('');
   const [type, setType] = useState<string>('Story');
-  const [priority, setPriority] = useState<string>('P3');
+  const [priority, setPriority] = useState<string>('medium');
   const [description, setDescription] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -131,7 +131,7 @@ export function CreateIssueForm({ projectKey, onCreated, onCancel }: CreateIssue
               className="px-3 py-2 text-sm rounded border border-[var(--color-surface-3)] bg-[var(--color-surface-0)] text-[var(--color-text-primary)]"
             >
               {ISSUE_PRIORITIES.map((p) => (
-                <option key={p} value={p}>{p}</option>
+                <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
               ))}
             </select>
           </div>

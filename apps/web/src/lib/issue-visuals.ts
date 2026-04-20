@@ -13,18 +13,18 @@ export const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
 };
 
 export const PRIORITY_COLORS: Record<string, string> = {
-  P1: '#F06A6A',
-  P2: '#F1BD6C',
-  P3: '#5DA283',
-  P4: '#6D6E6F',
+  critical: '#F06A6A',
+  high: '#F1BD6C',
+  medium: '#5DA283',
+  low: '#6D6E6F',
 };
 
 /** Pill-style priority chips matching the Figma Asana dark theme. */
 export const PRIORITY_PILLS: Record<string, { bg: string; text: string; label: string }> = {
-  P1: { bg: '#F06A6A', text: '#1E1F21', label: 'High' },
-  P2: { bg: '#F1BD6C', text: '#1E1F21', label: 'Medium' },
-  P3: { bg: '#5DA283', text: '#1E1F21', label: 'Low' },
-  P4: { bg: '#6D6E6F', text: '#FFFFFF', label: 'None' },
+  critical: { bg: '#F06A6A', text: '#1E1F21', label: 'Critical' },
+  high: { bg: '#F1BD6C', text: '#1E1F21', label: 'High' },
+  medium: { bg: '#5DA283', text: '#1E1F21', label: 'Medium' },
+  low: { bg: '#6D6E6F', text: '#FFFFFF', label: 'Low' },
 };
 
 export const TYPE_ORDER: Record<string, number> = {
@@ -35,10 +35,10 @@ export const TYPE_ORDER: Record<string, number> = {
 };
 
 export const PRIORITY_ORDER: Record<string, number> = {
-  P1: 0,
-  P2: 1,
-  P3: 2,
-  P4: 3,
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
 };
 
 export function typeLabel(type: string): string {

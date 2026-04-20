@@ -169,7 +169,7 @@ export class IssuesService {
           title,
           description: description ?? null,
           type: ISSUE_TYPE_DB_MAP[type] as any,
-          priority: priority ?? 'P3',
+          priority: priority ?? 'medium',
           statusId: firstStatus.id,
           assigneeId: assigneeId ?? null,
           reporterId: userId,
@@ -1076,7 +1076,7 @@ export class IssuesService {
 
     // Create Bug and auto-link atomically
     const bug = await this.create(
-      { title: dto.title, type: 'Bug', priority: (dto.priority as any) ?? 'P3', description: dto.description },
+      { title: dto.title, type: 'Bug', priority: (dto.priority as any) ?? 'medium', description: dto.description },
       userId,
       projectKey,
     );

@@ -280,7 +280,7 @@ function IssueRow({
   onOpen: () => void;
 }) {
   const typeColor = TYPE_COLORS[issue.type] ?? TYPE_COLORS.task;
-  const priorityColor = PRIORITY_COLORS[issue.priority] ?? PRIORITY_COLORS.P3;
+  const priorityColor = PRIORITY_COLORS[issue.priority] ?? PRIORITY_COLORS.medium;
   const assigneeEmail = issue.assigneeId ? userEmailById.get(issue.assigneeId) : null;
   const assigneeLabel = assigneeEmail ? assigneeEmail.split('@')[0] : 'Unassigned';
 
@@ -330,7 +330,7 @@ function IssueRow({
             className="w-2 h-2 rounded-full inline-block"
             style={{ backgroundColor: priorityColor }}
           />
-          {issue.priority}
+          {issue.priority.charAt(0).toUpperCase() + issue.priority.slice(1)}
         </span>
       </td>
       <td

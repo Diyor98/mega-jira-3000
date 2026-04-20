@@ -269,7 +269,7 @@ Headless UI provides accessible, unstyled interaction primitives (Dialog, Menu, 
 | accent-blue | #2563EB | Links, active states, primary actions |
 | status-green | #059669 | Done, success |
 | status-yellow | #D97706 | In Review, warning |
-| status-red | #DC2626 | Blocked, error, P1 |
+| status-red | #DC2626 | Blocked, error, critical |
 
 **Typography:** Inter font. Default body: 14px/20px (text-sm). Metadata: 12px/16px. Section headers: 16px/24px. Page titles: 18px/28px.
 
@@ -352,7 +352,7 @@ This single interaction demonstrates all four differentiators: performance (inst
 | Accent | accent-blue | #2563EB | Links, primary buttons, active tabs |
 | Success | status-green | #059669 | Done, success toasts |
 | Warning | status-yellow | #D97706 | In Review, caution |
-| Danger | status-red | #DC2626 | Blocked, P1, errors, delete |
+| Danger | status-red | #DC2626 | Blocked, critical, errors, delete |
 
 **Issue Type Badges:**
 
@@ -363,7 +363,7 @@ This single interaction demonstrates all four differentiators: performance (inst
 | Task | #D1FAE5 | #047857 |
 | Bug | #FEE2E2 | #B91C1C |
 
-**Priority Indicators:** P1 filled red, P2 filled orange, P3 filled blue, P4 outlined gray. All paired with text labels.
+**Priority Indicators:** Critical filled red, High filled orange, Medium filled green, Low outlined gray. All paired with text labels. Values stored as lowercase: `critical`, `high`, `medium`, `low`.
 
 ### Typography System
 

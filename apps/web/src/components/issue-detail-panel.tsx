@@ -57,10 +57,10 @@ const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
-  P1: '#DC2626',
-  P2: '#D97706',
-  P3: '#2563EB',
-  P4: '#9CA3AF',
+  critical: '#F06A6A',
+  high: '#F1BD6C',
+  medium: '#5DA283',
+  low: '#6D6E6F',
 };
 
 interface IssueDetailPanelProps {
@@ -250,7 +250,7 @@ export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted, user
   }
 
   const typeColor = TYPE_COLORS[issue.type] ?? TYPE_COLORS.task;
-  const priorityColor = PRIORITY_COLORS[issue.priority] ?? PRIORITY_COLORS.P3;
+  const priorityColor = PRIORITY_COLORS[issue.priority] ?? PRIORITY_COLORS.medium;
   // Story 9.6: show the assigned user's email prefix (part before `@`)
   // instead of a truncated UUID. Falls back to the first 8 chars of the
   // UUID if the user isn't in the loaded `users` list (stale prop,
@@ -391,7 +391,7 @@ export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted, user
               autoFocus
             >
               {ISSUE_PRIORITIES.map((p) => (
-                <option key={p} value={p}>{p}</option>
+                <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
               ))}
             </select>
           ) : (
@@ -403,7 +403,7 @@ export function IssueDetailPanel({ projectKey, issueId, onClose, onDeleted, user
                 className="w-2.5 h-2.5 rounded-full inline-block"
                 style={{ backgroundColor: priorityColor }}
               />
-              <span className="text-sm text-[var(--color-text-primary)]">{issue.priority}</span>
+              <span className="text-sm text-[var(--color-text-primary)]">{issue.priority.charAt(0).toUpperCase() + issue.priority.slice(1)}</span>
             </div>
           )}
         </div>
@@ -828,7 +828,7 @@ function BugFromStoryForm({ projectKey, storyIssueId, onCreated, onCancel }: {
           onChange={(e) => setPriority(e.target.value)}
           className="text-xs px-2 py-1 rounded border border-[var(--color-surface-3)] bg-[var(--color-surface-0)]"
         >
-          {ISSUE_PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+          {ISSUE_PRIORITIES.map((p) => <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
         </select>
         <button type="submit" disabled={submitting} className="text-xs px-2 py-1 rounded bg-[#B91C1C] text-white disabled:opacity-50">
           {submitting ? '...' : 'Create Bug'}
