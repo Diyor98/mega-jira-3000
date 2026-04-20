@@ -51,11 +51,11 @@ export function Sidebar() {
   const activeProjectKey = pathname.match(/^\/projects\/([^/]+)/)?.[1];
 
   return (
-    <aside className="h-full w-72 min-[1440px]:w-72 lg:w-12 flex-shrink-0 bg-[#2E2E30] border-r border-[#565557] flex flex-col">
+    <aside className="h-full w-72 flex-shrink-0 bg-[#2E2E30] border-r border-[#565557] flex flex-col">
       {/* Top section */}
-      <div className="flex flex-col gap-2 p-4 lg:p-2 min-[1440px]:p-4">
+      <div className="flex flex-col gap-2 p-4">
         {/* Create issue button — dispatches the same event as Cmd+N */}
-        <div className="px-1 lg:px-0 min-[1440px]:px-1">
+        <div className="px-1">
           <button
             type="button"
             onClick={() => {
@@ -68,11 +68,11 @@ export function Sidebar() {
               }
             }}
             disabled={!activeProjectKey}
-            className="flex items-center gap-2 h-9 pl-2 pr-4 lg:px-2 lg:justify-center min-[1440px]:pl-2 min-[1440px]:pr-4 min-[1440px]:justify-start rounded-[18px] border border-[#565557] bg-[#2E2E30] hover:bg-[#353638] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 h-9 pl-2 pr-4 rounded-[18px] border border-[#565557] bg-[#2E2E30] hover:bg-[#353638] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             title={activeProjectKey ? 'Create issue (Cmd+N)' : 'Open a project first'}
           >
             <span className="flex items-center justify-center w-5 h-5 rounded-full bg-[#F06A6A] text-[#1E1F21] text-xs font-bold leading-none">+</span>
-            <span className="text-sm text-[#F5F4F3] lg:hidden min-[1440px]:inline">Create</span>
+            <span className="text-sm text-[#F5F4F3]">Create</span>
           </button>
         </div>
 
@@ -90,31 +90,21 @@ export function Sidebar() {
               <path d="M3 7.5L10 2.5L17 7.5V16a1 1 0 01-1 1H4a1 1 0 01-1-1V7.5z" />
               <path d="M7.5 17V10h5v7" />
             </svg>
-            <span className="lg:hidden min-[1440px]:inline">Home</span>
+            <span>Home</span>
           </Link>
         </nav>
       </div>
 
       {/* Projects section */}
-      <div className="flex flex-col gap-2 pl-3 pr-4 pb-4 lg:px-2 min-[1440px]:pl-3 min-[1440px]:pr-4">
+      <div className="flex flex-col gap-2 pl-3 pr-4 pb-4">
         <div className="flex items-center gap-3 px-3 h-5">
-          <span className="text-sm font-semibold text-[#F5F4F3] lg:hidden min-[1440px]:inline">Projects</span>
+          <span className="text-sm font-semibold text-[#F5F4F3]">Projects</span>
           <Link
             href="/projects/new"
             title="New Project"
-            className="text-[#A2A0A2] hover:text-[#F5F4F3] transition-colors lg:hidden min-[1440px]:block"
+            className="text-[#A2A0A2] hover:text-[#F5F4F3] transition-colors"
           >
             <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M6 1v10M1 6h10" />
-            </svg>
-          </Link>
-          {/* Icon-only mode */}
-          <Link
-            href="/projects/new"
-            title="New Project"
-            className="hidden lg:block min-[1440px]:hidden text-[#A2A0A2] hover:text-[#F5F4F3] mx-auto"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M6 1v10M1 6h10" />
             </svg>
           </Link>
@@ -122,7 +112,7 @@ export function Sidebar() {
 
         <div className="flex-1 overflow-y-auto flex flex-col">
           {loading && (
-            <p className="px-3 py-1.5 text-xs text-[#A2A0A2] lg:hidden min-[1440px]:block">Loading...</p>
+            <p className="px-3 py-1.5 text-xs text-[#A2A0A2]">Loading...</p>
           )}
 
           {!loading && projects.map((project) => {
@@ -147,13 +137,13 @@ export function Sidebar() {
                 >
                   {project.key}
                 </span>
-                <span className="truncate lg:hidden min-[1440px]:inline">{project.name}</span>
+                <span className="truncate">{project.name}</span>
               </Link>
             );
           })}
 
           {!loading && projects.length === 0 && (
-            <p className="px-3 py-1.5 text-xs text-[#A2A0A2] lg:hidden min-[1440px]:block">No projects yet</p>
+            <p className="px-3 py-1.5 text-xs text-[#A2A0A2]">No projects yet</p>
           )}
         </div>
       </div>
@@ -162,10 +152,10 @@ export function Sidebar() {
       <div className="flex-1" />
 
       {/* Bottom bar — Help opens the keyboard shortcut overlay (same as pressing ?) */}
-      <div className="border-t border-[#565557] flex items-center justify-center px-5 h-14 lg:px-1 min-[1440px]:px-5">
+      <div className="border-t border-[#565557] flex items-center justify-center px-5 h-14">
         <button
           type="button"
-          className="flex items-center gap-1.5 h-9 px-3 rounded-lg text-sm font-semibold text-[#A2A0A2] hover:text-[#F5F4F3] hover:bg-[rgba(255,255,255,0.06)] transition-colors lg:px-1 min-[1440px]:px-3"
+          className="flex items-center gap-1.5 h-9 px-3 rounded-lg text-sm font-semibold text-[#A2A0A2] hover:text-[#F5F4F3] hover:bg-[rgba(255,255,255,0.06)] transition-colors"
           title="Keyboard shortcuts (?)"
           onClick={() => {
             window.dispatchEvent(
@@ -178,7 +168,7 @@ export function Sidebar() {
             <path d="M6 6a2 2 0 114 0c0 1.1-.9 1.5-1.5 2" />
             <circle cx="8" cy="11.5" r="0.5" fill="currentColor" />
           </svg>
-          <span className="lg:hidden min-[1440px]:inline">Help</span>
+          <span>Help</span>
         </button>
       </div>
     </aside>
