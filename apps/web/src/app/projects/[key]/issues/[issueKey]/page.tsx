@@ -59,17 +59,17 @@ function IssueDetailPage() {
     };
   }, [projectKey, issueKey]);
 
-  // Load users list (for assignee dropdown inside IssueDetailPanel).
+  // Load project members (for assignee dropdown inside IssueDetailPanel).
   useEffect(() => {
     apiClient
-      .get<Array<{ id: string; email: string }>>('/users')
+      .get<Array<{ userId: string; email: string }>>(`/projects/${projectKey}/members`)
       .then((data) => {
-        if (data) setUsers(data);
+        if (data) setUsers(data.map((m) => ({ id: m.userId, email: m.email })));
       })
       .catch(() => {
         /* silently fail — assignee dropdown will be empty */
       });
-  }, []);
+  }, [projectKey]);
 
   // Story 9.7: load the project's workflow statuses so the Status field
   // renders a name instead of a UUID slice. Fire-and-forget — if the

@@ -47,7 +47,7 @@ This story wires the existing pieces together. No new API, no new data flow, no 
     </div>
   )}
   ```
-- `users` prop on `<IssueDetailPanel>` (declared at line 71) — already loaded from `GET /users` by the project page. Passed as `users={users}`. When empty, the workflow prompt and command palette gracefully show no options; we'll do the same.
+- `users` prop on `<IssueDetailPanel>` (declared at line 71) — loaded from `GET /projects/{key}/members` by the project page (bug-fixed 2026-04-20; was incorrectly calling `GET /users` which returned all system users). Passed as `users={users}`. When empty, the workflow prompt and command palette gracefully show no options; we'll do the same.
 - Backend: `PATCH /projects/:key/issues/:id` already accepts `assigneeId: z.string().uuid().nullable().optional()` in the shared Zod schema at `packages/shared/src/schemas/issue.schema.ts:18`. The service already logs `[AUDIT] issue.updated | fields=[assigneeId]` on change (verified at `issues.service.ts:758`). No API changes needed.
 
 ### What does NOT exist
@@ -226,12 +226,16 @@ claude-opus-4-6 (1M context)
 ### Change Log
 
 - 2026-04-15 — Story 9.6 implementation complete. All 5 tasks done. Status: in-progress → review.
+- 2026-04-20 — Bug fix: assignee dropdown showed all system users instead of project members only. Root cause: both `page.tsx` (board) and `issues/[issueKey]/page.tsx` (permalink) called `GET /api/v1/users` which returns every user in the database. Fixed to call `GET /api/v1/projects/{key}/members` and map the `userId` field to `id` to preserve the existing `{ id, email }` shape consumed by `IssueDetailPanel`.
 
 ### File List
 
 **Modified:**
 - `apps/web/src/components/issue-detail-panel.tsx` — added `assigneeDisplay` / `assigneeEditable` / `sortedUsers` derived consts; replaced the read-only assignee block (was lines 387–393) with a click-to-edit select matching the priority-edit pattern.
+- `apps/web/src/app/projects/[key]/page.tsx` — (bug fix) changed user-list fetch from `GET /users` to `GET /projects/{key}/members`, mapped `userId` → `id`.
+- `apps/web/src/app/projects/[key]/issues/[issueKey]/page.tsx` — (bug fix) same endpoint + mapping fix as above.
 
 **Unchanged but referenced:**
 - `apps/api/src/modules/issues/issues.service.ts` — no changes, existing `update()` already handles `assigneeId: null`
 - `packages/shared/src/schemas/issue.schema.ts` — no changes, existing `updateIssueSchema` already permits nullable `assigneeId`
+- `apps/api/src/modules/project-members/project-members.service.ts` — no changes, existing `listByProject()` returns project-scoped members (the correct data source)

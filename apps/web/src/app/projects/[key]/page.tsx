@@ -613,17 +613,17 @@ export default function ProjectPage() {
     }
   }, [issues, pendingIssueKey]);
 
-  // Load users once on mount for the workflow prompt assignee dropdown.
+  // Load project members for the assignee dropdown (workflow prompt, detail panel).
   useEffect(() => {
     apiClient
-      .get<Array<{ id: string; email: string }>>('/users')
+      .get<Array<{ userId: string; email: string }>>(`/projects/${projectKey}/members`)
       .then((data) => {
-        if (data) setUsers(data);
+        if (data) setUsers(data.map((m) => ({ id: m.userId, email: m.email })));
       })
       .catch(() => {
         // silently fail — the prompt will just have no options
       });
-  }, []);
+  }, [projectKey]);
 
   // Load filter presets once on mount. Presets are personal and do not
   // change under filter-bar interactions, so no dep on `filter`.
