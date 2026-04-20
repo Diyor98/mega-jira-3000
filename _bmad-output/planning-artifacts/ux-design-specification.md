@@ -636,7 +636,7 @@ Max 1 primary button per context. Danger never primary. Min 32px height. Icon-on
 
 ### Navigation Patterns
 
-- **Sidebar:** Fixed 240px, collapsible to 48px. Projects collapsible. Active: accent-blue.
+- **Sidebar:** Fixed 240px, collapsible to 48px icon-only. Dark bg `#2E2E30`, border `#565557`. Top: Create issue button (red pill, dispatches Cmd+N event, disabled when no project is active), Home link. Middle: Projects section with colored icons and full project names, `+` new-project link. Bottom: Help button (opens keyboard shortcut overlay). Active project highlighted with `rgba(255,255,255,0.11)`. Text `#F5F4F3`, muted `#A2A0A2`.
 - **Topbar:** Sticky. Project name + view toggle + filter bar.
 - **Cmd+K:** Universal search — issues, actions, projects, users. Frecency-ranked.
 - **Issue links:** MEGA-55 keys are always clickable. Detail panel opens on click, Esc to close.
