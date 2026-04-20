@@ -636,7 +636,7 @@ Max 1 primary button per context. Danger never primary. Min 32px height. Icon-on
 
 ### Navigation Patterns
 
-- **Sidebar:** Fixed 240px, collapsible to 48px. Dark background (`#2E2E30`), border-right (`#565557`). Top section: Create button (red pill `#F06A6A`), Home, My Tasks, Inbox (with notification dot). Projects section with header + add icon, project list with colored icons and active highlight (`rgba(255,255,255,0.11)`). Bottom bar: Invite and Help buttons separated by vertical divider. Font: Segoe UI 14px. Text: `#F5F4F3`, text weak: `#A2A0A2`.
+- **Sidebar:** Fixed 240px, collapsible to 48px. Projects collapsible. Active: accent-blue.
 - **Topbar:** Sticky. Project name + view toggle + filter bar.
 - **Cmd+K:** Universal search — issues, actions, projects, users. Frecency-ranked.
 - **Issue links:** MEGA-55 keys are always clickable. Detail panel opens on click, Esc to close.
